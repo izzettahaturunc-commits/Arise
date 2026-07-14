@@ -1,0 +1,1269 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sistem Uyanış</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      background-color: #03050a;
+      color: #dce8f5;
+      font-family: monospace;
+      padding-bottom: 80px;
+      overflow-x: hidden;
+    }
+    /* Izgara Arka Plan */
+    .grid-bg {
+      position: fixed;
+      inset: 0;
+      opacity: 0.06;
+      background-image: 
+        linear-gradient(#5fd4ff 1px, transparent 1px), 
+        linear-gradient(90deg, #5fd4ff 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 1;
+    }
+    /* Sistem Çerçevesi */
+    .system-frame {
+      position: relative;
+      border: 1px solid #2a4a68;
+      background-color: rgba(6, 11, 20, 0.9);
+      padding: 15px;
+      margin-bottom: 20px;
+    }
+    .system-frame::before, .system-frame::after {
+      content: "";
+      position: absolute;
+      width: 10px;
+      height: 10px;
+      border-color: #5fd4ff;
+      border-style: solid;
+    }
+    .system-frame::before {
+      top: -1px; left: -1px;
+      border-width: 1px 0 0 1px;
+    }
+    .system-frame::after {
+      top: -1px; right: -1px;
+      border-width: 1px 1px 0 0;
+    }
+    /* Alt Navigasyon */
+    .bottom-nav {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background-color: rgba(4, 8, 16, 0.95);
+      border-top: 1px solid #132033;
+      display: flex;
+      justify-content: space-around;
+      padding: 12px 0;
+      z-index: 100;
+    }
+    .nav-btn {
+      background: none;
+      border: none;
+      color: #546b85;
+      font-family: monospace;
+      font-weight: bold;
+      font-size: 10px;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+    .nav-btn.active {
+      color: #5fd4ff;
+    }
+    /* Sekmeler */
+    .tab-content {
+      display: none;
+    }
+    .tab-content.active {
+      display: block;
+    }
+    /* Görev Kartları */
+    .quest-card {
+      border: 1px solid #182943;
+      background-color: #080d18;
+      padding: 15px;
+      margin-bottom: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .quest-card.completed {
+      border-color: #1c3a2c;
+      background-color: #081b12;
+    }
+    .btn {
+      background-color: #0e2a3d;
+      border: 1px solid rgba(95, 212, 255, 0.4);
+      color: #5fd4ff;
+      padding: 8px 16px;
+      font-weight: bold;
+      font-family: monospace;
+      cursor: pointer;
+      font-size: 11px;
+    }
+    .btn:active {
+      background-color: #153e5a;
+    }
+    .progress-bar-container {
+      height: 8px;
+      background-color: #0e1b2e;
+      overflow: hidden;
+      margin-top: 8px;
+    }
+    .progress-bar {
+      height: 100%;
+      background: linear-gradient(90deg, #5fd4ff, #7f5fff);
+      width: 0%;
+      transition: width 0.5s ease;
+    }
+    /* Kamera ve Koşu Ekranları */
+    .overlay-screen {
+      position: fixed;
+      inset: 0;
+      background-color: #02040a;
+      z-index: 200;
+      display: none;
+      flex-direction: column;
+    }
+    .overlay-screen.active {
+      display: flex;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="grid-bg"></div>
+
+  <!-- HOŞ GELDİN EKRANI -->
+  <div id="welcome-screen" style="position: fixed; inset: 0; background-color: #03050a; z-index: 300; display: flex; align-items: center; justify-content: center; flex-direction: column; padding: 20px; text-align: center;">
+    <p style="font-size: 10px; letter-spacing: 0.5em; color: rgba(95, 212, 255, 0.6); margin-bottom: 15px;">SİSTEM</p>
+    <h1 style="font-size: 32px; font-weight: bold; color: white; margin-bottom: 10px; letter-spacing: 2px;">UYANIŞ</h1>
+    <p style="font-size: 12px; color: #7a8ca3; max-width: 280px; margin-bottom: 30px; line-height: 1.6;">
+      Bugünden itibaren sen de bir avcısın. Görevlerini tamamla, seviye atla, rankını yükselt.
+    </p>
+    <button onclick="enterSystem()" style="padding: 12px 30px; border: 1px solid #5fd4ff; background: none; color: #5fd4ff; font-family: monospace; letter-spacing: 3px; font-size: 12px; cursor: pointer;">
+      SİSTEME GİR
+    </button>
+  </div>
+
+  <!-- ANA UYGULAMA İÇERİĞİ -->
+  <div id="app-content" style="max-width: 480px; margin: 0 auto; padding: 20px; position: relative; z-index: 10; display: none;">
+    
+    <!-- Üst Bilgi Alanı -->
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+      <div>
+        <p style="font-size: 9px; letter-spacing: 3px; color: rgba(95, 212, 255, 0.7);">SİSTEM AKTİF</p>
+        <h1 id="page-title" style="font-size: 20px; font-weight: bold; color: white;">GÜNLÜK GÖREVLER</h1>
+      </div>
+      <div style="text-align: right;">
+        <p style="font-size: 9px; color: #7a8ca3; letter-spacing: 1px;">RANK</p>
+        <p id="rank-display" style="font-size: 24px; font-weight: bold; color: #5fd4ff;">E</p>
+      </div>
+    </div>
+
+    <!-- Seviye Kartı -->
+    <div class="system-frame">
+      <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+        <div>
+          <p style="font-size: 9px; color: #7a8ca3; letter-spacing: 1px;">SEVİYE</p>
+          <p id="level-display" style="font-size: 28px; font-weight: bold; color: white;">1</p>
+        </div>
+        <div style="text-align: right;">
+          <p style="font-size: 9px; color: #7a8ca3; letter-spacing: 1px;">🔥 SERİ</p>
+          <p id="streak-display" style="font-size: 28px; font-weight: bold; color: #f97316;">0</p>
+        </div>
+      </div>
+      <div class="progress-bar-container">
+        <div id="xp-bar" class="progress-bar"></div>
+      </div>
+      <p id="xp-text" style="font-size: 10px; color: #7a8ca3; margin-top: 5px;">0 / 120 XP</p>
+    </div>
+
+    <!-- SEKME 1: GÖREVLER -->
+    <div id="tab-quests" class="tab-content active">
+      <p id="completion-status" style="font-size: 12px; color: #7a8ca3; margin-bottom: 15px;">0 / 5 görev tamamlandı</p>
+      <div id="quests-list"></div>
+
+      <h3 style="font-size: 12px; font-weight: bold; color: #7f5fff; letter-spacing: 1px; margin: 20px 0 10px;">EK ANTRENMAN · SINIRSIZ</h3>
+      <p style="font-size: 10px; color: #546b85; margin-bottom: 12px;">Günlük görevlerin dışında istediğin kadar yapabilirsin, her tekrarda XP biraz azalır.</p>
+      <div id="bonus-quests-list"></div>
+    </div>
+
+    <!-- SEKME 2: KARAKTER -->
+    <div id="tab-character" class="tab-content">
+      <div class="system-frame">
+        <h3 style="font-size: 13px; font-weight: bold; color: #5fd4ff; margin-bottom: 12px;">AVCI DURUMU</h3>
+        <div style="font-size: 12px; line-height: 2.2;">
+          <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #14233c;">
+            <span style="color: #7a8ca3;">Unvan:</span><span style="color: white; font-weight: bold;">Gölge Savaşçısı</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #14233c;">
+            <span style="color: #7a8ca3;">Mevcut Sınıf:</span><span id="char-rank" style="color: #5fd4ff; font-weight: bold;">E Sınıfı</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="system-frame">
+        <h3 style="font-size: 13px; font-weight: bold; color: #5fd4ff; margin-bottom: 12px;">STAT DETAYLARI</h3>
+        <div style="font-size: 12px; display: flex; flex-direction: column; gap: 12px;">
+          <div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+              <span>GÜÇ (Şınav/Squat)</span><span id="stat-power" style="color: #5fd4ff;">0 tkr</span>
+            </div>
+            <div style="height: 6px; background-color: #0e1b2e;"><div id="bar-power" style="height:100%; background-color:#5fd4ff; width:0%"></div></div>
+          </div>
+          <div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+              <span>DAYANIKLILIK (Plank)</span><span id="stat-endurance" style="color: #5fd4ff;">0 sn</span>
+            </div>
+            <div style="height: 6px; background-color: #0e1b2e;"><div id="bar-endurance" style="height:100%; background-color:#7f5fff; width:0%"></div></div>
+          </div>
+          <div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+              <span>HIZ (Koşu)</span><span id="stat-speed" style="color: #5fd4ff;">0 km</span>
+            </div>
+            <div style="height: 6px; background-color: #0e1b2e;"><div id="bar-speed" style="height:100%; background-color:#34d399; width:0%"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="system-frame">
+        <h3 style="font-size: 13px; font-weight: bold; color: #5fd4ff; margin-bottom: 12px;">ROZETLER</h3>
+        <div id="badges-list" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;"></div>
+      </div>
+    </div>
+
+    <!-- SEKME 3: KAYITLAR -->
+    <div id="tab-stats" class="tab-content">
+      <div class="system-frame">
+        <h3 style="font-size: 13px; font-weight: bold; color: #5fd4ff; margin-bottom: 12px;">KAYIT GEÇMİŞİ</h3>
+        <p style="font-size: 11px; color: #7a8ca3; margin-bottom: 15px;">Günlük tamamladığın görevlerin sayısı:</p>
+        <div id="history-chart" style="display: flex; justify-content: space-between; align-items: flex-end; height: 100px; padding-top: 10px;">
+          <!-- JS barları buraya çizecek -->
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- KAMERA EKRANI -->
+  <div id="camera-screen" class="overlay-screen">
+    <div style="display: flex; justify-content: space-between; align-items: center; padding: 15px; border-bottom: 1px solid #132033;">
+      <p id="cam-title" style="font-size: 14px; letter-spacing: 2px; color: #5fd4ff;">GÖREV GÖRÜNTÜLEME</p>
+      <button onclick="closeCamera()" style="background: none; border: none; color: #7a8ca3; font-size: 20px; cursor: pointer;">✕</button>
+    </div>
+    <div style="flex: 1; display: flex; align-items: center; justify-content: center; position: relative;">
+      <video id="webcam" autoplay playsinline muted style="width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1);"></video>
+      <canvas id="pose-canvas" style="width: 100%; height: 100%; object-fit: cover; position: absolute; inset: 0; transform: scaleX(-1); display: none; pointer-events: none;"></canvas>
+      <p id="cam-err" style="position: absolute; color: #ff6b6b; padding: 20px; text-align: center; display: none;">Kamera izni gerekiyor.</p>
+    </div>
+    <div style="padding: 25px; border-top: 1px solid #132033; background-color: #05070f; text-align: center;">
+      <p id="pose-status" style="font-size: 11px; color: #7a8ca3; margin-bottom: 12px; display: none;">İskelet aranıyor...</p>
+      <div style="display: flex; justify-content: center; align-items: center; gap: 25px;">
+        <button onclick="changeReps(-1)" style="width: 45px; height: 45px; border: 1px solid #243449; background: none; color: #7a8ca3; font-size: 18px; cursor: pointer;">−</button>
+        <button onclick="changeReps(1)" style="width: 100px; height: 100px; border-radius: 50%; border: 2px solid #5fd4ff; background: none; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer;">
+          <span id="rep-count" style="font-size: 32px; font-weight: bold; color: white;">0</span>
+          <span id="rep-unit" style="font-size: 10px; color: #5fd4ff;">tekrar</span>
+        </button>
+        <button onclick="changeReps(1)" style="width: 45px; height: 45px; border: 1px solid #243449; background: none; color: #7a8ca3; font-size: 18px; cursor: pointer;">+</button>
+      </div>
+      <p style="font-size: 9px; color: #546b85; margin-top: 12px; max-width: 300px; margin-left: auto; margin-right: auto;">İskelet seni algılayıp belirli açıya inip çıktığında otomatik sayar. Yanlış sayarsa yukarıdaki +/− ile elle düzelt.</p>
+      <button onclick="submitCameraQuest()" class="btn" style="width: 100%; margin-top: 15px; padding: 12px; background-color: #5fd4ff; color: #02121c; border: none; font-size: 14px; letter-spacing: 2px;">GÖREVİ TAMAMLA</button>
+    </div>
+  </div>
+
+  <!-- PLANK EKRANI (OTOMATİK SÜRE SAYACI) -->
+  <div id="plank-screen" class="overlay-screen">
+    <div style="display: flex; justify-content: space-between; align-items: center; padding: 15px; border-bottom: 1px solid #132033;">
+      <p style="font-size: 14px; letter-spacing: 2px; color: #5fd4ff;">PLANK GÖREVİ</p>
+      <button onclick="cancelPlank()" style="background: none; border: none; color: #7a8ca3; font-size: 20px; cursor: pointer;">✕</button>
+    </div>
+    <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative;">
+      <video id="plank-webcam" autoplay playsinline muted style="width: 100%; height: 100%; object-fit: cover; position: absolute; inset: 0; opacity: 0.35; transform: scaleX(-1);"></video>
+      <div style="position: relative; text-align: center;">
+        <p style="font-size: 11px; color: #7a8ca3; letter-spacing: 2px;">SÜRE (OTOMATİK)</p>
+        <p id="plank-time" style="font-size: 56px; font-weight: bold; color: white;">00:00</p>
+        <p id="plank-target" style="font-size: 11px; color: #5fd4ff; margin-top: 6px;">Hedef: 60 sn</p>
+      </div>
+    </div>
+    <div style="padding: 25px; border-top: 1px solid #132033; background-color: #05070f; display: flex; gap: 15px;">
+      <button id="plank-pause-btn" onclick="togglePausePlank()" class="btn" style="flex: 1; padding: 14px;">DURAKLAT</button>
+      <button onclick="finishPlank()" class="btn" style="flex: 1; padding: 14px; background-color: #5fd4ff; color: #02121c; border: none;">BİTİR</button>
+    </div>
+  </div>
+
+  <!-- KOŞU EKRANI (GPS) -->
+  <div id="run-screen" class="overlay-screen">
+    <div style="display: flex; justify-content: space-between; align-items: center; padding: 15px; border-bottom: 1px solid #132033;">
+      <p style="font-size: 14px; letter-spacing: 2px; color: #5fd4ff;">KOŞU GÖREVİ</p>
+      <button onclick="cancelRun()" style="background: none; border: none; color: #7a8ca3; font-size: 20px; cursor: pointer;">✕</button>
+    </div>
+    <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 30px; padding: 20px;">
+      <div style="text-align: center;">
+        <p style="font-size: 11px; color: #7a8ca3; letter-spacing: 2px;">MESAFE</p>
+        <p id="run-distance" style="font-size: 52px; font-weight: bold; color: white;">0.00 <span style="font-size: 20px; color: #5fd4ff;">km</span></p>
+      </div>
+      <div style="display: flex; gap: 40px;">
+        <div style="text-align: center;">
+          <p style="font-size: 10px; color: #7a8ca3;">SÜRE</p>
+          <p id="run-time" style="font-size: 22px; font-weight: bold; color: white;">00:00</p>
+        </div>
+        <div style="text-align: center;">
+          <p style="font-size: 10px; color: #7a8ca3;">TEMPO</p>
+          <p id="run-pace" style="font-size: 22px; font-weight: bold; color: white;">--:--</p>
+        </div>
+      </div>
+      <p id="run-status" style="font-size: 11px; color: #7a8ca3; text-align: center; max-width: 280px;">Konum aranıyor...</p>
+      <p id="run-err" style="font-size: 11px; color: #ff6b6b; text-align: center; display: none; max-width: 280px;">Konum izni gerekiyor.</p>
+      <p style="font-size: 9px; color: #3d5066; text-align: center; max-width: 280px; margin-top: -20px;">GPS uydu sinyaline dayanır, bina içinde doğası gereği hatalı ölçer. Kapalı mekandaysan adım sayacına geç.</p>
+      <button id="indoor-btn" onclick="toggleIndoorMode()" style="background: none; border: 1px solid #243449; color: #5fd4ff; font-family: monospace; font-size: 10px; padding: 8px 14px; cursor: pointer;">İÇ MEKAN MODU (ADIM SAYACI)</button>
+      <button onclick="useManualDistance()" style="background: none; border: none; color: #546b85; font-family: monospace; font-size: 10px; text-decoration: underline; cursor: pointer;">GPS çalışmıyor, mesafeyi elle gir</button>
+    </div>
+    <div style="padding: 25px; border-top: 1px solid #132033; background-color: #05070f; display: flex; gap: 15px;">
+      <button id="run-pause-btn" onclick="togglePauseRun()" class="btn" style="flex: 1; padding: 14px;">DURAKLAT</button>
+      <button onclick="finishRun()" class="btn" style="flex: 1; padding: 14px; background-color: #5fd4ff; color: #02121c; border: none;">BİTİR</button>
+    </div>
+  </div>
+
+  <!-- TOAST BİLDİRİMİ -->
+  <div id="toast" style="position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 400; border: 1px solid rgba(95, 212, 255, 0.5); background-color: #050b16; padding: 10px 20px; font-size: 12px; display: none; letter-spacing: 1px; color: #5fd4ff;"></div>
+
+  <!-- LEVEL UP EKRANI -->
+  <div id="levelup-modal" style="position: fixed; inset: 0; background-color: rgba(0,0,0,0.85); z-index: 500; display: none; align-items: center; justify-content: center; padding: 20px;">
+    <div class="system-frame" style="text-align: center; padding: 30px; box-shadow: 0 0 40px rgba(95, 212, 255, 0.3);">
+      <p style="color: #5fd4ff; font-size: 11px; letter-spacing: 3px; margin-bottom: 5px;">SEVİYE ATLADIN</p>
+      <p id="lvl-up-text" style="font-size: 44px; font-weight: bold; color: white; margin-bottom: 5px;">LV. 2</p>
+      <p id="rank-up-text" style="color: #7a8ca3; font-size: 11px; letter-spacing: 2px; margin-bottom: 25px;">E RANK</p>
+      <button onclick="closeLvlUp()" class="btn" style="padding: 10px 25px;">DEVAM ET</button>
+    </div>
+  </div>
+
+  <!-- ALT MENÜ -->
+  <div class="bottom-nav" id="app-nav" style="display: none;">
+    <button onclick="switchTab('quests')" id="nav-quests" class="nav-btn active">
+      <span style="font-size: 16px;">⚔️</span>
+      <span>GÖREVLER</span>
+    </button>
+    <button onclick="switchTab('character')" id="nav-character" class="nav-btn">
+      <span style="font-size: 16px;">👤</span>
+      <span>KARAKTER</span>
+    </button>
+    <button onclick="switchTab('stats')" id="nav-stats" class="nav-btn">
+      <span style="font-size: 16px;">📊</span>
+      <span>KAYITLAR</span>
+    </button>
+  </div>
+
+  <script>
+    // SİSTEM DEĞİŞKENLERİ
+    let state = {
+      level: 1,
+      xp: 0,
+      streak: 0,
+      lastDay: null,
+      completed: {},
+      totals: { power: 0, endurance: 0, speed: 0 },
+      history: {},
+      startDate: null,   // zorluk artışı bu tarihe göre hesaplanır
+      bonusDay: null,    // ekstra antrenmanların sayıldığı gün
+      bonusCount: {},    // o gün her ekstra görevden kaç kez yapıldığı
+      badges: []         // kazanılan rozet id'leri
+    };
+
+    const RANKS = ["E", "D", "C", "B", "A", "S"];
+    const QUESTS = [
+      { id: "pushup", name: "Şınav", unit: "tekrar", target: 20, xp: 30, stat: "power" },
+      { id: "squat", name: "Squat", unit: "tekrar", target: 30, xp: 30, stat: "power" },
+      { id: "situp", name: "Mekik", unit: "tekrar", target: 25, xp: 30, stat: "power" },
+      { id: "plank", name: "Plank", unit: "saniye", target: 60, xp: 25, stat: "endurance" },
+      { id: "run", name: "Koşu", unit: "km", target: 3, xp: 60, stat: "speed" }
+    ];
+
+    // Ekstra antrenmanlar: günlük görevlerin dışında, istendiği kadar tekrarlanabilir.
+    // Her tekrarda biraz daha az XP verir (azalan getiri) ki asıl günlük görevlerin yerini almasın.
+    const BONUS_QUESTS = [
+      { id: "bonus_pushup", name: "Ekstra Şınav Seti", unit: "tekrar", target: 15, xp: 15, stat: "power" },
+      { id: "bonus_squat", name: "Ekstra Squat Seti", unit: "tekrar", target: 20, xp: 15, stat: "power" },
+      { id: "bonus_situp", name: "Ekstra Mekik Seti", unit: "tekrar", target: 20, xp: 15, stat: "power" },
+      { id: "bonus_plank", name: "Ekstra Plank", unit: "saniye", target: 30, xp: 12, stat: "endurance" }
+    ];
+
+    // Rozetler: belirli eşikler geçildiğinde kazanılır, karakter sekmesinde gösterilir.
+    const BADGES = [
+      { id: "streak7", name: "7 Gün Seri", check: s => s.streak >= 7 },
+      { id: "streak30", name: "30 Gün Seri", check: s => s.streak >= 30 },
+      { id: "power100", name: "100 Güç Tekrarı", check: s => s.totals.power >= 100 },
+      { id: "power500", name: "500 Güç Tekrarı", check: s => s.totals.power >= 500 },
+      { id: "endurance600", name: "10 Dk Toplam Plank", check: s => s.totals.endurance >= 600 },
+      { id: "speed20", name: "20 km Toplam Koşu", check: s => s.totals.speed >= 20 },
+      { id: "rankUp", name: "D Sınıfına Yükseliş", check: s => getRank(s.level) !== "E" }
+    ];
+
+    const getXpNeeded = (lvl) => 80 + lvl * 40;
+    const getRank = (lvl) => RANKS[Math.min(5, Math.floor((lvl - 1) / 5))];
+    const getTodayStr = () => new Date().toISOString().slice(0, 10);
+
+    // Zorluk kademesi: her 10 günde bir artar, en fazla 6 kademe (hedefler kademe başına %15 zorlaşır).
+    // Günlük değil - sistemin "zamanla zorlaşsın ama her gün değil" isteğine göre ayarlandı.
+    function getDifficultyTier() {
+      if (!state.startDate) return 0;
+      const daysPassed = Math.floor((new Date(getTodayStr()) - new Date(state.startDate)) / 86400000);
+      return Math.min(6, Math.floor(daysPassed / 10));
+    }
+    function getScaledTarget(baseTarget) {
+      return Math.round(baseTarget * (1 + getDifficultyTier() * 0.15));
+    }
+
+    function getQuestById(id) {
+      return QUESTS.find(item => item.id === id) || BONUS_QUESTS.find(item => item.id === id);
+    }
+
+    // Bir gün atlanınca (hiç görev tamamlanmadan bir gün geçince) küçük bir XP cezası uygular.
+    // Amaç cezalandırmak değil, seri kırmanın bir bedeli olsun.
+    function applyPenaltyIfNeeded() {
+      if (!state.lastDay) return;
+      const gapDays = Math.round((new Date(getTodayStr()) - new Date(state.lastDay)) / 86400000);
+      if (gapDays >= 2) {
+        const missedDays = gapDays - 1;
+        const penalty = Math.min(state.xp, 15 * missedDays);
+        state.xp -= penalty;
+        state.streak = 0;
+        showToast(`SİSTEM CEZASI: ${missedDays} gün boşluk bırakıldı. Seri sıfırlandı${penalty > 0 ? `, -${penalty} XP` : ""}.`);
+      }
+    }
+
+    function checkNewBadges() {
+      BADGES.forEach(b => {
+        if (!state.badges.includes(b.id) && b.check(state)) {
+          state.badges.push(b.id);
+          showToast(`🏅 Yeni rozet: ${b.name}`);
+        }
+      });
+    }
+
+    // Başlangıç Kurulumu
+    window.onload = async function() {
+      await loadState();
+      if (!state.startDate) state.startDate = getTodayStr();
+      applyPenaltyIfNeeded();
+      checkNewBadges();
+      saveState();
+      updateUI();
+    };
+
+    function enterSystem() {
+      document.getElementById("welcome-screen").style.display = "none";
+      document.getElementById("app-content").style.display = "block";
+      document.getElementById("app-nav").style.display = "flex";
+      getAudioCtx(); // ilk dokunuşta ses motorunu aç (mobil tarayıcılar bunu şart koşuyor)
+    }
+
+    // ---- SES EFEKTLERİ (özgün, kod ile üretilen sentetik sesler) ----
+    let audioCtx = null;
+    function getAudioCtx() {
+      try {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === "suspended") audioCtx.resume();
+        return audioCtx;
+      } catch (e) { return null; }
+    }
+
+    function playTone(freq, duration, type, startTime, gainVal) {
+      const ctx = getAudioCtx();
+      if (!ctx) return;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = type || "sine";
+      osc.frequency.value = freq;
+      const t0 = ctx.currentTime + (startTime || 0);
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(gainVal || 0.15, t0 + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + duration);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t0);
+      osc.stop(t0 + duration + 0.02);
+    }
+
+    // Görev tamamlama: kısa, çift notalı "onay" bipi
+    function playQuestSound() {
+      playTone(660, 0.09, "square", 0, 0.1);
+      playTone(990, 0.14, "square", 0.09, 0.1);
+    }
+
+    // Seviye atlama: "Sistem uyanıyor" tarzı yükselen dörtlü akor (Arise sahnesindeki
+    // dramatik yükseliş hissini andıran, tamamen özgün bir synth dizisi)
+    function playLevelUpSound() {
+      playTone(220, 0.5, "sawtooth", 0, 0.05);
+      playTone(523, 0.2, "sawtooth", 0, 0.08);
+      playTone(659, 0.2, "sawtooth", 0.12, 0.08);
+      playTone(784, 0.2, "sawtooth", 0.24, 0.08);
+      playTone(1046, 0.45, "sawtooth", 0.36, 0.1);
+      playTone(1568, 0.3, "sine", 0.5, 0.07);
+    }
+
+    // Görev başlatma: kısa "sistem" tık sesi
+    function playStartSound() {
+      playTone(440, 0.06, "square", 0, 0.06);
+    }
+
+    function switchTab(tabId) {
+      document.querySelectorAll(".tab-content").forEach(el => el.classList.remove("active"));
+      document.querySelectorAll(".nav-btn").forEach(el => el.classList.remove("active"));
+      
+      document.getElementById(`tab-${tabId}`).classList.add("active");
+      document.getElementById(`nav-${tabId}`).classList.add("active");
+
+      const titles = { quests: "GÜNLÜK GÖREVLER", character: "KARAKTER", stats: "KAYITLAR" };
+      document.getElementById("page-title").innerText = titles[tabId];
+      
+      if(tabId === "stats") renderChart();
+    }
+
+    function updateUI() {
+      const today = getTodayStr();
+      
+      // Gün kontrolü (Sıfırlama)
+      if (state.lastDay && state.lastDay !== today) {
+        state.completed = {};
+      }
+
+      const xpNeeded = getXpNeeded(state.level);
+      const currentRank = getRank(state.level);
+
+      document.getElementById("level-display").innerText = state.level;
+      document.getElementById("streak-display").innerText = state.streak;
+      document.getElementById("rank-display").innerText = currentRank;
+      document.getElementById("char-rank").innerText = currentRank + " Sınıfı";
+      
+      const xpPct = Math.min(100, (state.xp / xpNeeded) * 100);
+      document.getElementById("xp-bar").style.width = xpPct + "%";
+      document.getElementById("xp-text").innerText = `${state.xp} / ${xpNeeded} XP`;
+
+      // Stat Barları
+      document.getElementById("stat-power").innerText = state.totals.power + " tkr";
+      document.getElementById("bar-power").style.width = Math.min(100, (state.totals.power / 500) * 100) + "%";
+
+      document.getElementById("stat-endurance").innerText = state.totals.endurance + " sn";
+      document.getElementById("bar-endurance").style.width = Math.min(100, (state.totals.endurance / 1500) * 100) + "%";
+
+      document.getElementById("stat-speed").innerText = state.totals.speed.toFixed(1) + " km";
+      document.getElementById("bar-speed").style.width = Math.min(100, (state.totals.speed / 50) * 100) + "%";
+
+      // Görev Listesi
+      const listEl = document.getElementById("quests-list");
+      listEl.innerHTML = "";
+      let completedCount = 0;
+      const tier = getDifficultyTier();
+
+      QUESTS.forEach(q => {
+        const isDone = state.completed[q.id];
+        if (isDone) completedCount++;
+        const target = getScaledTarget(q.target);
+
+        const card = document.createElement("div");
+        card.className = `quest-card ${isDone ? 'completed' : ''}`;
+        card.innerHTML = `
+          <div>
+            <p style="font-size: 14px; font-weight: bold; color: ${isDone ? '#4ade80' : 'white'};">${q.name}</p>
+            <p style="font-size: 11px; color: #7a8ca3;">Hedef: ${target} ${q.unit} · +${q.xp} XP${tier > 0 ? ` · Kademe ${tier}` : ''}</p>
+          </div>
+          ${isDone ? 
+            '<div style="color: #4ade80; font-weight: bold; border: 1px solid #1c3a2c; padding: 6px 12px;">✓</div>' : 
+            `<button onclick="startQuest('${q.id}')" class="btn">BAŞLAT</button>`
+          }
+        `;
+        listEl.appendChild(card);
+      });
+
+      document.getElementById("completion-status").innerText = `${completedCount} / ${QUESTS.length} görev tamamlandı`;
+
+      // Ekstra Antrenman Listesi (sınırsız tekrarlanabilir, azalan XP)
+      if (state.bonusDay !== today) { state.bonusDay = today; state.bonusCount = {}; }
+      const bonusListEl = document.getElementById("bonus-quests-list");
+      bonusListEl.innerHTML = "";
+      BONUS_QUESTS.forEach(q => {
+        const count = state.bonusCount[q.id] || 0;
+        const effectiveXp = Math.max(5, q.xp - count * 3);
+        const card = document.createElement("div");
+        card.className = "quest-card";
+        card.innerHTML = `
+          <div>
+            <p style="font-size: 14px; font-weight: bold; color: white;">${q.name}</p>
+            <p style="font-size: 11px; color: #7a8ca3;">Hedef: ${q.target} ${q.unit} · +${effectiveXp} XP ${count > 0 ? `· Bugün ${count}. kez` : ''}</p>
+          </div>
+          <button onclick="startQuest('${q.id}')" class="btn">BAŞLAT</button>
+        `;
+        bonusListEl.appendChild(card);
+      });
+
+      renderBadges();
+    }
+
+    function renderBadges() {
+      const el = document.getElementById("badges-list");
+      if (!el) return;
+      el.innerHTML = "";
+      BADGES.forEach(b => {
+        const earned = state.badges.includes(b.id);
+        const chip = document.createElement("div");
+        chip.style.cssText = `border: 1px solid ${earned ? '#1c3a2c' : '#182943'}; background-color: ${earned ? '#081b12' : '#080d18'}; color: ${earned ? '#4ade80' : '#546b85'}; padding: 8px 10px; font-size: 10px; text-align: center;`;
+        chip.innerText = (earned ? "🏅 " : "🔒 ") + b.name;
+        el.appendChild(chip);
+      });
+    }
+
+    // Aktif Görev Kamera Süreci
+    let activeQuestId = null;
+    let tempReps = 0;
+    let streamObj = null;
+    let poseDetector = null;
+    let poseLibsLoaded = false;
+    let poseTrackingInterval = null;
+    let poseTrackPhase = "up";
+    let poseExerciseType = null;
+
+    // İskelet takibiyle sayılabilen egzersizler ve eklem açısı eşikleri.
+    // Mantık: "up" (dinlenme/başlangıç duruşu, açı büyük) -> "down" (hareketin dibi, açı küçük) -> tekrar "up" olunca 1 tekrar sayılır.
+    const POSE_EXERCISES = {
+      pushup: { points: ["shoulder", "elbow", "wrist"], downAngle: 90, upAngle: 150 },
+      squat: { points: ["hip", "knee", "ankle"], downAngle: 110, upAngle: 160 },
+      situp: { points: ["shoulder", "hip", "knee"], downAngle: 100, upAngle: 150 }
+    };
+    const POSE_CONNECTIONS = [
+      ["left_shoulder", "right_shoulder"],
+      ["left_shoulder", "left_elbow"], ["left_elbow", "left_wrist"],
+      ["right_shoulder", "right_elbow"], ["right_elbow", "right_wrist"],
+      ["left_shoulder", "left_hip"], ["right_shoulder", "right_hip"],
+      ["left_hip", "right_hip"],
+      ["left_hip", "left_knee"], ["left_knee", "left_ankle"],
+      ["right_hip", "right_knee"], ["right_knee", "right_ankle"]
+    ];
+
+    async function startQuest(questId) {
+      if (questId === "run") {
+        openRun();
+        return;
+      }
+      if (questId === "plank" || questId === "bonus_plank") {
+        openPlank(questId);
+        return;
+      }
+
+      const q = getQuestById(questId);
+      activeQuestId = questId;
+      tempReps = 0;
+      playStartSound();
+      
+      document.getElementById("cam-title").innerText = q.name.toUpperCase();
+      document.getElementById("rep-count").innerText = "0";
+      document.getElementById("rep-unit").innerText = q.unit;
+      document.getElementById("camera-screen").classList.add("active");
+      document.getElementById("cam-err").style.display = "none";
+
+      try {
+        streamObj = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
+        const video = document.getElementById("webcam");
+        video.srcObject = streamObj;
+        await new Promise(res => { video.onloadedmetadata = res; });
+
+        const baseType = questId.replace("bonus_", "");
+        if (POSE_EXERCISES[baseType]) {
+          startPoseTracking(baseType, video);
+        }
+      } catch (e) {
+        document.getElementById("cam-err").style.display = "block";
+      }
+    }
+
+    function changeReps(val) {
+      tempReps = Math.max(0, tempReps + val);
+      document.getElementById("rep-count").innerText = tempReps;
+    }
+
+    function closeCamera() {
+      stopPoseTracking();
+      if(streamObj) {
+        streamObj.getTracks().forEach(t => t.stop());
+        streamObj = null;
+      }
+      document.getElementById("camera-screen").classList.remove("active");
+    }
+
+    // --- İSKELET TAKİBİ (TensorFlow.js + MoveNet) ---
+    // Gerçek bir poz tanıma modeli: kamera görüntüsünü cihazın kendisinde işler, hiçbir görüntü
+    // dışarı gönderilmez, API anahtarı ya da ücret yok. Kütüphane ve model dosyaları ilk kullanımda
+    // internetten indirilir (birkaç MB), tarayıcı önbelleğe aldıktan sonra tekrar indirmez.
+    function loadScript(src) {
+      return new Promise((resolve, reject) => {
+        const s = document.createElement("script");
+        s.src = src;
+        s.onload = resolve;
+        s.onerror = () => reject(new Error("Yüklenemedi: " + src));
+        document.head.appendChild(s);
+      });
+    }
+
+    async function ensurePoseLibsLoaded() {
+      if (poseLibsLoaded) return;
+      await loadScript("https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js");
+      await loadScript("https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection@2.1.3/dist/pose-detection.min.js");
+      poseLibsLoaded = true;
+    }
+
+    async function ensureDetector() {
+      if (poseDetector) return poseDetector;
+      poseDetector = await poseDetection.createDetector(
+        poseDetection.SupportedModels.MoveNet,
+        { modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING }
+      );
+      return poseDetector;
+    }
+
+    // Üç nokta arasındaki açıyı (derece) hesaplar, B noktası açının köşesidir.
+    function angleAt(A, B, C) {
+      const AB = { x: A.x - B.x, y: A.y - B.y };
+      const CB = { x: C.x - B.x, y: C.y - B.y };
+      const magAB = Math.hypot(AB.x, AB.y);
+      const magCB = Math.hypot(CB.x, CB.y);
+      if (magAB === 0 || magCB === 0) return null;
+      const cos = Math.min(1, Math.max(-1, (AB.x * CB.x + AB.y * CB.y) / (magAB * magCB)));
+      return Math.acos(cos) * 180 / Math.PI;
+    }
+
+    // Sol/sağ taraftan hangisi daha net görünüyorsa onu kullanır (kameraya yan durunca tek taraf net olabiliyor).
+    function getAngleForExercise(kp, exType) {
+      const cfg = POSE_EXERCISES[exType];
+      let best = null;
+      ["left", "right"].forEach(side => {
+        const pts = cfg.points.map(p => kp[`${side}_${p}`]);
+        if (pts.every(p => p && p.score > 0.35)) {
+          const angle = angleAt(pts[0], pts[1], pts[2]);
+          const conf = Math.min(...pts.map(p => p.score));
+          if (angle !== null && (!best || conf > best.conf)) best = { angle, conf };
+        }
+      });
+      return best ? best.angle : null;
+    }
+
+    function drawSkeleton(ctx, kp, w, h) {
+      ctx.clearRect(0, 0, w, h);
+      ctx.strokeStyle = "#5fd4ff";
+      ctx.lineWidth = 4;
+      POSE_CONNECTIONS.forEach(([a, b]) => {
+        const pa = kp[a], pb = kp[b];
+        if (pa && pb && pa.score > 0.3 && pb.score > 0.3) {
+          ctx.beginPath();
+          ctx.moveTo(pa.x, pa.y);
+          ctx.lineTo(pb.x, pb.y);
+          ctx.stroke();
+        }
+      });
+      ctx.fillStyle = "#4ade80";
+      Object.values(kp).forEach(p => {
+        if (p.score > 0.3) {
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, 5, 0, 2 * Math.PI);
+          ctx.fill();
+        }
+      });
+    }
+
+    async function startPoseTracking(exerciseType, video) {
+      poseExerciseType = exerciseType;
+      poseTrackPhase = "up";
+      const statusEl = document.getElementById("pose-status");
+      statusEl.style.display = "block";
+      statusEl.innerText = "İskelet motoru yükleniyor...";
+
+      try {
+        await ensurePoseLibsLoaded();
+        await ensureDetector();
+      } catch (e) {
+        statusEl.innerText = "Otomatik takip yüklenemedi (internet gerekiyor). Yukarıdan elle sayabilirsin.";
+        return;
+      }
+
+      const canvas = document.getElementById("pose-canvas");
+      const ctx = canvas.getContext("2d");
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      canvas.style.display = "block";
+      statusEl.innerText = "İskelet aranıyor...";
+
+      poseTrackingInterval = setInterval(async () => {
+        if (!video.videoWidth || !poseDetector) return;
+        try {
+          const poses = await poseDetector.estimatePoses(video, { flipHorizontal: false });
+          if (!poses.length) {
+            statusEl.innerText = "İskelet bulunamadı, kadraja tam gir.";
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            return;
+          }
+          const kp = {};
+          poses[0].keypoints.forEach(p => { kp[p.name] = p; });
+          drawSkeleton(ctx, kp, canvas.width, canvas.height);
+
+          const angle = getAngleForExercise(kp, poseExerciseType);
+          if (angle !== null) {
+            statusEl.innerText = `İskelet bulundu ✓ (açı: ${Math.round(angle)}°)`;
+            const cfg = POSE_EXERCISES[poseExerciseType];
+            if (poseTrackPhase === "up" && angle < cfg.downAngle) {
+              poseTrackPhase = "down";
+            } else if (poseTrackPhase === "down" && angle > cfg.upAngle) {
+              poseTrackPhase = "up";
+              changeReps(1);
+            }
+          } else {
+            statusEl.innerText = "İskelet net görünmüyor, kadraja tam gir.";
+          }
+        } catch (e) {
+          // Bir sonraki karede tekrar dener, sessizce geç
+        }
+      }, 150);
+    }
+
+    function stopPoseTracking() {
+      if (poseTrackingInterval) {
+        clearInterval(poseTrackingInterval);
+        poseTrackingInterval = null;
+      }
+      const canvas = document.getElementById("pose-canvas");
+      if (canvas) {
+        const ctx = canvas.getContext("2d");
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        canvas.style.display = "none";
+      }
+      const statusEl = document.getElementById("pose-status");
+      if (statusEl) statusEl.style.display = "none";
+    }
+
+    function submitCameraQuest() {
+      const q = getQuestById(activeQuestId);
+      closeCamera();
+      completeQuest(q, tempReps);
+    }
+
+    // Ortak tamamlama işlemi: hem günlük görevler hem ekstra antrenmanlar için kullanılır.
+    function completeQuest(q, amount) {
+      const isBonus = q.id.startsWith("bonus_");
+      let xpGain = q.xp;
+
+      if (isBonus) {
+        const count = state.bonusCount[q.id] || 0;
+        xpGain = Math.max(5, q.xp - count * 3);
+        state.bonusCount[q.id] = count + 1;
+      } else {
+        state.completed[q.id] = true;
+      }
+      state.totals[q.stat] += amount;
+
+      const today = getTodayStr();
+      state.history[today] = Object.keys(state.completed).length;
+
+      // Günlük Seri Kontrolü
+      if (state.lastDay !== today) {
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        const yestStr = yesterday.toISOString().slice(0, 10);
+        state.streak = (state.lastDay === yestStr) ? state.streak + 1 : 1;
+        state.lastDay = today;
+      }
+
+      showToast(`${q.name} tamamlandı! +${xpGain} XP`);
+      playQuestSound();
+      grantXp(xpGain);
+      checkNewBadges();
+
+      saveState();
+      updateUI();
+    }
+
+    // Koşu Görevi (GPS + İç Mekan Adım Sayacı)
+    let runWatchId = null;
+    let runDistance = 0;
+    let runElapsed = 0;
+    let runPaused = false;
+    let runTimerInterval = null;
+    let lastCoord = null;
+    let indoorMode = false;
+
+    function openRun() {
+      playStartSound();
+      runDistance = 0;
+      runElapsed = 0;
+      runPaused = false;
+      lastCoord = null;
+      indoorMode = false;
+      document.getElementById("run-distance").innerHTML = '0.00 <span style="font-size: 20px; color: #5fd4ff;">km</span>';
+      document.getElementById("run-time").innerText = "00:00";
+      document.getElementById("run-pace").innerText = "--:--";
+      document.getElementById("run-status").innerText = "Konum aranıyor...";
+      document.getElementById("run-err").style.display = "none";
+      document.getElementById("run-pause-btn").innerText = "DURAKLAT";
+      document.getElementById("indoor-btn").innerText = "İÇ MEKAN MODU (ADIM SAYACI)";
+      document.getElementById("run-screen").classList.add("active");
+
+      runTimerInterval = setInterval(updateRunTimer, 1000);
+      startGPSTracking();
+    }
+
+    function startGPSTracking() {
+      if (!navigator.geolocation) {
+        document.getElementById("run-err").style.display = "block";
+        document.getElementById("run-err").innerText = "Cihazın konum servisini desteklemiyor. İç mekan modunu deneyebilirsin.";
+        return;
+      }
+
+      // GPS, sayfa https (veya localhost) üzerinden açılmadığı sürece tarayıcıda çalışmaz.
+      if (!window.isSecureContext) {
+        document.getElementById("run-err").style.display = "block";
+        document.getElementById("run-err").innerText =
+          "Bu sayfa güvenli bağlantı (https://) üzerinden açılmadığı için GPS engelleniyor. Dosyayı doğrudan açmak yerine bir https adresinden (ör. GitHub Pages) yükle.";
+        return;
+      }
+
+      runWatchId = navigator.geolocation.watchPosition(
+        pos => {
+          document.getElementById("run-err").style.display = "none";
+          const acc = Math.round(pos.coords.accuracy);
+          document.getElementById("run-status").innerText = `Konum takip ediliyor... (±${acc} m)`;
+          const { latitude, longitude, accuracy } = pos.coords;
+          // Doğruluk eşiği gevşetildi: telefonlarda açık havada bile sık sık 30m'yi geçiyor,
+          // eskiden bu yüzden mesafe hiç artmıyordu.
+          if (lastCoord && !runPaused && accuracy < 50) {
+            const d = haversineKm(lastCoord.lat, lastCoord.lon, latitude, longitude);
+            // GPS gürültüsünü filtrele: çok küçük veya gerçekçi olmayan sıçramaları yoksay
+            if (d > 0.001 && d < 0.15) {
+              runDistance += d;
+              document.getElementById("run-distance").innerHTML =
+                runDistance.toFixed(2) + ' <span style="font-size: 20px; color: #5fd4ff;">km</span>';
+            }
+          }
+          if (accuracy < 50) {
+            lastCoord = { lat: latitude, lon: longitude };
+          }
+        },
+        err => {
+          document.getElementById("run-err").style.display = "block";
+          if (err.code === 1) {
+            document.getElementById("run-err").innerText =
+              "Konum izni reddedildi. Tarayıcı ayarlarında bu site için konumu 'İzin ver' yap, sonra sayfayı yenile.";
+          } else if (err.code === 2) {
+            document.getElementById("run-err").innerText =
+              "Konum sinyali alınamıyor. Kapalı alandaysan açık havaya çık, telefonun GPS/Konum servisi açık mı kontrol et.";
+          } else {
+            document.getElementById("run-err").innerText =
+              "Konum sinyali bekleniyor, biraz daha aç havada dur. (zaman aşımı)";
+          }
+        },
+        { enableHighAccuracy: true, maximumAge: 2000, timeout: 20000 }
+      );
+    }
+
+    // GPS uydu sinyaline dayandığı için kapalı mekanlarda doğası gereği güvenilmez;
+    // 15 metre yürüyüp 0.02 km görünmesi bir hata değil, sinyalin bina içinde bozulmasıdır.
+    // Bunun için gerçek bir çözüm olarak telefonun hareket sensörüyle çalışan adım sayacına geçiş sunuyoruz.
+    function toggleIndoorMode() {
+      indoorMode = !indoorMode;
+      if (indoorMode) {
+        if (runWatchId !== null) { navigator.geolocation.clearWatch(runWatchId); runWatchId = null; }
+        document.getElementById("run-status").innerText = "İç mekan modu: adım sayılıyor...";
+        document.getElementById("run-err").style.display = "none";
+        document.getElementById("indoor-btn").innerText = "GPS MODUNA DÖN";
+        startStepCounter();
+      } else {
+        stopStepCounter();
+        document.getElementById("indoor-btn").innerText = "İÇ MEKAN MODU (ADIM SAYACI)";
+        document.getElementById("run-status").innerText = "Konum aranıyor...";
+        startGPSTracking();
+      }
+    }
+
+    // Basit ivmeölçer tabanlı adım sayacı: tepe noktası algılama + ortalama adım uzunluğu (0.7m) tahmini.
+    let stepCount = 0;
+    let lastAccelMag = 0;
+    let lastStepTime = 0;
+
+    function onDeviceMotion(e) {
+      if (runPaused) return;
+      const acc = e.accelerationIncludingGravity;
+      if (!acc) return;
+      const mag = Math.sqrt((acc.x || 0) ** 2 + (acc.y || 0) ** 2 + (acc.z || 0) ** 2);
+      const now = Date.now();
+      if (mag - lastAccelMag > 3.2 && (now - lastStepTime) > 300) {
+        stepCount++;
+        lastStepTime = now;
+        runDistance = (stepCount * 0.7) / 1000;
+        document.getElementById("run-distance").innerHTML =
+          runDistance.toFixed(2) + ' <span style="font-size: 20px; color: #5fd4ff;">km</span>';
+      }
+      lastAccelMag = mag;
+    }
+
+    function startStepCounter() {
+      stepCount = 0;
+      lastAccelMag = 0;
+      if (typeof DeviceMotionEvent !== "undefined" && typeof DeviceMotionEvent.requestPermission === "function") {
+        // iOS 13+ hareket sensörü için ayrı izin gerekiyor
+        DeviceMotionEvent.requestPermission().then(res => {
+          if (res === "granted") window.addEventListener("devicemotion", onDeviceMotion);
+          else showToast("Hareket sensörü izni verilmedi.");
+        }).catch(() => showToast("Hareket sensörüne erişilemedi."));
+      } else if (window.DeviceMotionEvent) {
+        window.addEventListener("devicemotion", onDeviceMotion);
+      } else {
+        showToast("Cihaz hareket sensörünü desteklemiyor, mesafeyi elle gir.");
+      }
+    }
+
+    function stopStepCounter() {
+      window.removeEventListener("devicemotion", onDeviceMotion);
+    }
+
+    // Manuel mesafe girişi: GPS hiç çalışmazsa (koşu bandı, tünel, GPS'siz cihaz vb.) yedek yol
+    function useManualDistance() {
+      const val = prompt("Koştuğun mesafeyi km olarak gir (örn: 2.5):");
+      if (val === null) return;
+      const km = parseFloat(val.replace(",", "."));
+      if (isNaN(km) || km <= 0) {
+        showToast("Geçerli bir mesafe gir.");
+        return;
+      }
+      runDistance = km;
+      document.getElementById("run-distance").innerHTML =
+        runDistance.toFixed(2) + ' <span style="font-size: 20px; color: #5fd4ff;">km</span>';
+      showToast("Mesafe elle girildi.");
+    }
+
+    function haversineKm(lat1, lon1, lat2, lon2) {
+      const R = 6371;
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a = Math.sin(dLat / 2) ** 2 +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    }
+
+    function updateRunTimer() {
+      if (runPaused) return;
+      runElapsed++;
+      const min = String(Math.floor(runElapsed / 60)).padStart(2, "0");
+      const sec = String(runElapsed % 60).padStart(2, "0");
+      document.getElementById("run-time").innerText = `${min}:${sec}`;
+      if (runDistance > 0.05) {
+        const paceSecPerKm = runElapsed / runDistance;
+        const pMin = Math.floor(paceSecPerKm / 60);
+        const pSec = Math.round(paceSecPerKm % 60);
+        document.getElementById("run-pace").innerText = `${pMin}:${String(pSec).padStart(2, "0")}`;
+      }
+    }
+
+    function togglePauseRun() {
+      runPaused = !runPaused;
+      document.getElementById("run-pause-btn").innerText = runPaused ? "DEVAM ET" : "DURAKLAT";
+    }
+
+    function stopRunTracking() {
+      if (runWatchId !== null) {
+        navigator.geolocation.clearWatch(runWatchId);
+        runWatchId = null;
+      }
+      if (runTimerInterval) {
+        clearInterval(runTimerInterval);
+        runTimerInterval = null;
+      }
+    }
+
+    function cancelRun() {
+      stopRunTracking();
+      stopStepCounter();
+      document.getElementById("run-screen").classList.remove("active");
+    }
+
+    function finishRun() {
+      stopRunTracking();
+      stopStepCounter();
+      document.getElementById("run-screen").classList.remove("active");
+
+      const q = QUESTS.find(item => item.id === "run");
+      const distance = Math.round(runDistance * 100) / 100;
+
+      if (distance <= 0) {
+        showToast("Mesafe kaydedilmedi, görev tamamlanmadı.");
+        return;
+      }
+
+      completeQuest(q, distance);
+    }
+
+    // Plank Görevi (Otomatik Süre Sayacı)
+    let plankElapsed = 0;
+    let plankPaused = false;
+    let plankInterval = null;
+    let plankStream = null;
+    let activePlankId = null;
+
+    async function openPlank(questId) {
+      activePlankId = questId;
+      const q = getQuestById(questId);
+      playStartSound();
+      plankElapsed = 0;
+      plankPaused = false;
+      document.getElementById("plank-time").innerText = "00:00";
+      document.getElementById("plank-target").innerText = `Hedef: ${questId === "plank" ? getScaledTarget(q.target) : q.target} sn`;
+      document.getElementById("plank-pause-btn").innerText = "DURAKLAT";
+      document.getElementById("plank-screen").classList.add("active");
+
+      try {
+        plankStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
+        document.getElementById("plank-webcam").srcObject = plankStream;
+      } catch (e) {
+        // Kamera olmadan da süre sayabilir, kamera sadece görsel geri bildirim için
+      }
+
+      plankInterval = setInterval(() => {
+        if (plankPaused) return;
+        plankElapsed++;
+        const min = String(Math.floor(plankElapsed / 60)).padStart(2, "0");
+        const sec = String(plankElapsed % 60).padStart(2, "0");
+        document.getElementById("plank-time").innerText = `${min}:${sec}`;
+      }, 1000);
+    }
+
+    function togglePausePlank() {
+      plankPaused = !plankPaused;
+      document.getElementById("plank-pause-btn").innerText = plankPaused ? "DEVAM ET" : "DURAKLAT";
+    }
+
+    function stopPlankTracking() {
+      if (plankInterval) { clearInterval(plankInterval); plankInterval = null; }
+      if (plankStream) { plankStream.getTracks().forEach(t => t.stop()); plankStream = null; }
+    }
+
+    function cancelPlank() {
+      stopPlankTracking();
+      document.getElementById("plank-screen").classList.remove("active");
+    }
+
+    function finishPlank() {
+      stopPlankTracking();
+      document.getElementById("plank-screen").classList.remove("active");
+
+      if (plankElapsed <= 0) {
+        showToast("Süre kaydedilmedi, görev tamamlanmadı.");
+        return;
+      }
+
+      const q = getQuestById(activePlankId);
+      completeQuest(q, plankElapsed);
+    }
+
+    // XP ve Seviye Atlama Mekaniği
+    function grantXp(amount) {
+      state.xp += amount;
+      let needed = getXpNeeded(state.level);
+      let leveledUp = false;
+
+      while (state.xp >= needed) {
+        state.xp -= needed;
+        state.level += 1;
+        needed = getXpNeeded(state.level);
+        leveledUp = true;
+      }
+
+      if (leveledUp) {
+        document.getElementById("lvl-up-text").innerText = `LV. ${state.level}`;
+        document.getElementById("rank-up-text").innerText = getRank(state.level) + " RANK";
+        document.getElementById("levelup-modal").style.display = "flex";
+        playLevelUpSound();
+        if (navigator.vibrate) navigator.vibrate([80, 60, 120]);
+      }
+    }
+
+    function closeLvlUp() {
+      document.getElementById("levelup-modal").style.display = "none";
+    }
+
+    function showToast(msg) {
+      const toast = document.getElementById("toast");
+      toast.innerText = msg;
+      toast.style.display = "block";
+      setTimeout(() => { toast.style.display = "none"; }, 2500);
+      if (navigator.vibrate) navigator.vibrate(60);
+    }
+
+    function renderChart() {
+      const chartEl = document.getElementById("history-chart");
+      chartEl.innerHTML = "";
+
+      const days = [];
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        days.push(d.toISOString().slice(0, 10));
+      }
+
+      days.forEach(day => {
+        const count = state.history[day] || 0;
+        const pct = Math.max(4, (count / QUESTS.length) * 100);
+        const col = document.createElement("div");
+        col.style.cssText = "display:flex; flex-direction:column; align-items:center; justify-content:flex-end; gap:6px; flex:1; height:100%;";
+        col.innerHTML = `
+          <div style="width:60%; height:${pct}%; background: linear-gradient(180deg, #5fd4ff, #7f5fff);"></div>
+          <span style="font-size:9px; color:#546b85;">${day.slice(5)}</span>
+        `;
+        chartEl.appendChild(col);
+      });
+    }
+
+    // Kalıcı Kayıt: önce window.storage'ı dener (Claude ortamı), yoksa localStorage'a düşer
+    // (dosya bilgisayarda doğrudan bir tarayıcıda açıldığında bu devreye girer).
+    const STORAGE_KEY = "solo-leveling-state";
+    const hasCloudStorage = typeof window.storage !== "undefined";
+
+    async function saveState() {
+      try {
+        if (hasCloudStorage) {
+          await window.storage.set(STORAGE_KEY, JSON.stringify(state));
+        } else {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        }
+      } catch (e) {
+        console.error("Kayıt hatası:", e);
+      }
+    }
+
+    async function loadState() {
+      try {
+        let raw = null;
+        if (hasCloudStorage) {
+          const result = await window.storage.get(STORAGE_KEY);
+          raw = result ? result.value : null;
+        } else {
+          raw = localStorage.getItem(STORAGE_KEY);
+        }
+        if (raw) {
+          const loaded = JSON.parse(raw);
+          state = Object.assign(state, loaded);
+        }
+      } catch (e) {
+        // Henüz kayıt yok, ilk açılış - varsayılan state kullanılır
+        console.log("Kayıtlı ilerleme bulunamadı, yeni başlangıç.");
+      }
+    }
+  </script>
+</body>
+</html>
