@@ -240,6 +240,14 @@
       </div>
 
       <div class="system-frame">
+        <h3 style="font-size: 13px; font-weight: bold; color: #5fd4ff; margin-bottom: 12px;">SİSTEM SESİ</h3>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <p style="font-size: 11px; color: #7a8ca3; max-width: 220px;">Görev bitince, seviye atlayınca ve rozet kazanınca sistem sesli konuşsun.</p>
+          <button id="voice-toggle-btn" onclick="toggleVoice()" style="border: 1px solid #243449; background: none; color: #5fd4ff; font-family: monospace; font-size: 10px; padding: 8px 12px; cursor: pointer; white-space: nowrap;">AÇIK</button>
+        </div>
+      </div>
+
+      <div class="system-frame">
         <h3 style="font-size: 13px; font-weight: bold; color: #5fd4ff; margin-bottom: 12px;">ROZETLER</h3>
         <div id="badges-list" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;"></div>
       </div>
@@ -379,7 +387,8 @@
       startDate: null,   // zorluk artışı bu tarihe göre hesaplanır
       bonusDay: null,    // ekstra antrenmanların sayıldığı gün
       bonusCount: {},    // o gün her ekstra görevden kaç kez yapıldığı
-      badges: []         // kazanılan rozet id'leri
+      badges: [],        // kazanılan rozet id'leri
+      voiceEnabled: true // sesli sistem anonsları açık/kapalı
     };
 
     const RANKS = ["E", "D", "C", "B", "A", "S"];
@@ -441,16 +450,20 @@
         state.xp -= penalty;
         state.streak = 0;
         showToast(`SİSTEM CEZASI: ${missedDays} gün boşluk bırakıldı. Seri sıfırlandı${penalty > 0 ? `, -${penalty} XP` : ""}.`);
+        speakSystem(randomLine(PENALTY_LINES));
       }
     }
 
     function checkNewBadges() {
+      const earned = [];
       BADGES.forEach(b => {
         if (!state.badges.includes(b.id) && b.check(state)) {
           state.badges.push(b.id);
           showToast(`🏅 Yeni rozet: ${b.name}`);
+          earned.push(b);
         }
       });
+      return earned;
     }
 
     // Başlangıç Kurulumu
@@ -519,6 +532,87 @@
       playTone(440, 0.06, "square", 0, 0.06);
     }
 
+    // --- SESLİ SİSTEM (Web Speech API) ---
+    // Tamamen tarayıcının kendi yerleşik ses motorunu kullanır: API anahtarı, internet
+    // bağlantısı ya da ücret gerektirmez. Türkçe ses paketi varsa onu seçer, yoksa cihazın
+    // varsayılan sesiyle okur.
+    let systemVoice = null;
+    function initVoices() {
+      if (!("speechSynthesis" in window)) return;
+      const voices = speechSynthesis.getVoices();
+      if (voices.length) {
+        systemVoice = voices.find(v => v.lang && v.lang.toLowerCase().startsWith("tr")) || null;
+      }
+    }
+    if ("speechSynthesis" in window) {
+      speechSynthesis.onvoiceschanged = initVoices;
+      initVoices();
+    }
+
+    // Tekrar sayılarını okur (1, 2, 3...), sıraya girer, önceki sayıyı kesmez.
+    function speakNumber(n) {
+      if (!state.voiceEnabled || !("speechSynthesis" in window)) return;
+      try {
+        const utter = new SpeechSynthesisUtterance(String(n));
+        utter.lang = "tr-TR";
+        if (systemVoice) utter.voice = systemVoice;
+        utter.rate = 1.15;
+        utter.pitch = 0.85;
+        speechSynthesis.speak(utter);
+      } catch (e) {}
+    }
+
+    // Sistem anonsları (görev tamamlandı, seviye atladı vb.) - öncekini keser ki gecikmeli çalmasın.
+    function speakSystem(text) {
+      if (!state.voiceEnabled || !("speechSynthesis" in window)) return;
+      try {
+        speechSynthesis.cancel();
+        const utter = new SpeechSynthesisUtterance(text);
+        utter.lang = "tr-TR";
+        if (systemVoice) utter.voice = systemVoice;
+        utter.rate = 1.0;
+        utter.pitch = 0.8;
+        speechSynthesis.speak(utter);
+      } catch (e) {}
+    }
+
+    function randomLine(arr) {
+      return arr[Math.floor(Math.random() * arr.length)];
+    }
+
+    function toggleVoice() {
+      state.voiceEnabled = !state.voiceEnabled;
+      document.getElementById("voice-toggle-btn").innerText = state.voiceEnabled ? "AÇIK" : "KAPALI";
+      document.getElementById("voice-toggle-btn").style.color = state.voiceEnabled ? "#5fd4ff" : "#546b85";
+      if (state.voiceEnabled) {
+        speakSystem("Sistem sesi aktif.");
+      } else if ("speechSynthesis" in window) {
+        speechSynthesis.cancel();
+      }
+      saveState();
+    }
+
+    const QUEST_COMPLETE_LINES = [
+      "Görev tamamlandı. Sistem seni onaylıyor.",
+      "Zayıflık bir adım daha geride kaldı.",
+      "Güç arttı. Sınırlarını zorlamaya devam et.",
+      "Yeterlisin avcı. Sıradaki hedefe geç.",
+      "Sistem kaydetti. Gelişimin devam ediyor.",
+      "İyi iş. Ama sistem senden fazlasını bekliyor.",
+      "Bir görev daha tamamlandı. Sistem seni izliyor."
+    ];
+    const LEVEL_UP_LINES = [
+      "Seviye atladın. Yeni bir güç uyanıyor.",
+      "Sistem güncellendi. Artık daha güçlüsün.",
+      "Sınıf yükseldi. Sistem seni izlemeye devam ediyor.",
+      "Uyanış devam ediyor. Bir seviye daha aştın."
+    ];
+    const PENALTY_LINES = [
+      "Sistem cezası uygulandı. Disiplinini kaybetme avcı.",
+      "Boşluk tespit edildi. Sistem seni uyarıyor."
+    ];
+    const BADGE_LINE = (name) => `Yeni bir rozet kazandın. ${name}.`;
+
     function switchTab(tabId) {
       document.querySelectorAll(".tab-content").forEach(el => el.classList.remove("active"));
       document.querySelectorAll(".nav-btn").forEach(el => el.classList.remove("active"));
@@ -547,6 +641,12 @@
       document.getElementById("streak-display").innerText = state.streak;
       document.getElementById("rank-display").innerText = currentRank;
       document.getElementById("char-rank").innerText = currentRank + " Sınıfı";
+
+      const voiceBtn = document.getElementById("voice-toggle-btn");
+      if (voiceBtn) {
+        voiceBtn.innerText = state.voiceEnabled ? "AÇIK" : "KAPALI";
+        voiceBtn.style.color = state.voiceEnabled ? "#5fd4ff" : "#546b85";
+      }
       
       const xpPct = Math.min(100, (state.xp / xpNeeded) * 100);
       document.getElementById("xp-bar").style.width = xpPct + "%";
@@ -634,13 +734,16 @@
     let poseTrackingInterval = null;
     let poseTrackPhase = "up";
     let poseExerciseType = null;
+    let poseAngleMin = null;
+    let poseAngleMax = null;
 
-    // İskelet takibiyle sayılabilen egzersizler ve eklem açısı eşikleri.
-    // Mantık: "up" (dinlenme/başlangıç duruşu, açı büyük) -> "down" (hareketin dibi, açı küçük) -> tekrar "up" olunca 1 tekrar sayılır.
+    // İskelet takibiyle sayılabilen egzersizler ve hangi eklem üçlüsünün açısının izleneceği.
+    // Not: Eşik değerleri artık sabit değil - her seansta o kişinin gerçek hareket aralığına göre
+    // kendiliğinden kalibre oluyor (aşağıda poseAngleMin/Max), çünkü herkesin duruşu/kamera açısı farklı.
     const POSE_EXERCISES = {
-      pushup: { points: ["shoulder", "elbow", "wrist"], downAngle: 90, upAngle: 150 },
-      squat: { points: ["hip", "knee", "ankle"], downAngle: 110, upAngle: 160 },
-      situp: { points: ["shoulder", "hip", "knee"], downAngle: 100, upAngle: 150 }
+      pushup: { points: ["shoulder", "elbow", "wrist"] },
+      squat: { points: ["hip", "knee", "ankle"] },
+      situp: { points: ["shoulder", "hip", "knee"] }
     };
     const POSE_CONNECTIONS = [
       ["left_shoulder", "right_shoulder"],
@@ -691,6 +794,7 @@
     function changeReps(val) {
       tempReps = Math.max(0, tempReps + val);
       document.getElementById("rep-count").innerText = tempReps;
+      if (val > 0 && tempReps > 0) speakNumber(tempReps);
     }
 
     function closeCamera() {
@@ -784,6 +888,8 @@
     async function startPoseTracking(exerciseType, video) {
       poseExerciseType = exerciseType;
       poseTrackPhase = "up";
+      poseAngleMin = null;
+      poseAngleMax = null;
       const statusEl = document.getElementById("pose-status");
       statusEl.style.display = "block";
       statusEl.innerText = "İskelet motoru yükleniyor...";
@@ -818,13 +924,26 @@
 
           const angle = getAngleForExercise(kp, poseExerciseType);
           if (angle !== null) {
-            statusEl.innerText = `İskelet bulundu ✓ (açı: ${Math.round(angle)}°)`;
-            const cfg = POSE_EXERCISES[poseExerciseType];
-            if (poseTrackPhase === "up" && angle < cfg.downAngle) {
-              poseTrackPhase = "down";
-            } else if (poseTrackPhase === "down" && angle > cfg.upAngle) {
-              poseTrackPhase = "up";
-              changeReps(1);
+            // Kendi kendine kalibrasyon: bu seansta görülen en küçük ve en büyük açıyı öğreniyor,
+            // eşikleri o aralığa göre belirliyor. Böylece diz bükülü mekik, farklı kamera açısı gibi
+            // durumlarda sabit sayı yerine kişinin gerçek hareketine göre sayım yapılıyor.
+            if (poseAngleMin === null) { poseAngleMin = angle; poseAngleMax = angle; }
+            poseAngleMin = Math.min(poseAngleMin, angle);
+            poseAngleMax = Math.max(poseAngleMax, angle);
+            const range = poseAngleMax - poseAngleMin;
+
+            if (range < 20) {
+              statusEl.innerText = `İskelet bulundu ✓ · kalibre oluyor... (açı: ${Math.round(angle)}°)`;
+            } else {
+              const downT = poseAngleMin + range * 0.35;
+              const upT = poseAngleMin + range * 0.65;
+              statusEl.innerText = `İskelet bulundu ✓ (açı: ${Math.round(angle)}°)`;
+              if (poseTrackPhase === "up" && angle < downT) {
+                poseTrackPhase = "down";
+              } else if (poseTrackPhase === "down" && angle > upT) {
+                poseTrackPhase = "up";
+                changeReps(1);
+              }
             }
           } else {
             statusEl.innerText = "İskelet net görünmüyor, kadraja tam gir.";
@@ -884,8 +1003,18 @@
 
       showToast(`${q.name} tamamlandı! +${xpGain} XP`);
       playQuestSound();
-      grantXp(xpGain);
-      checkNewBadges();
+      const leveledUp = grantXp(xpGain);
+      const newBadges = checkNewBadges();
+
+      // Sesli anons: aynı anda birden fazlası olabilir ama sadece en önemlisi okunur
+      // (rozet > seviye atlama > normal görev tamamlama), üst üste binmesin diye.
+      if (newBadges.length) {
+        speakSystem(BADGE_LINE(newBadges[0].name));
+      } else if (leveledUp) {
+        speakSystem(randomLine(LEVEL_UP_LINES));
+      } else {
+        speakSystem(randomLine(QUEST_COMPLETE_LINES));
+      }
 
       saveState();
       updateUI();
@@ -1191,6 +1320,7 @@
         playLevelUpSound();
         if (navigator.vibrate) navigator.vibrate([80, 60, 120]);
       }
+      return leveledUp;
     }
 
     function closeLvlUp() {
