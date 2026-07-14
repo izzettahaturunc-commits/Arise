@@ -348,6 +348,12 @@
   <!-- TOAST BİLDİRİMİ -->
   <div id="toast" style="position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 400; border: 1px solid rgba(95, 212, 255, 0.5); background-color: #050b16; padding: 10px 20px; font-size: 12px; display: none; letter-spacing: 1px; color: #5fd4ff;"></div>
 
+  <!-- SİSTEM SESLİ BİLDİRİM (konuşma ile senkron, daktilo efektli) -->
+  <div id="sys-toast" style="position: fixed; top: 20px; left: 50%; transform: translateX(-50%) translateY(-16px); width: min(320px, 88vw); background: rgba(4, 9, 18, 0.96); border: 1px solid #5fd4ff; padding: 14px 16px; opacity: 0; pointer-events: none; transition: opacity 0.3s ease, transform 0.3s ease; z-index: 401; box-shadow: 0 0 25px rgba(95, 212, 255, 0.25);">
+    <p style="font-size: 9px; letter-spacing: 3px; color: rgba(95, 212, 255, 0.6); margin-bottom: 6px;">SİSTEM</p>
+    <p id="sys-toast-msg" style="font-size: 12px; color: white; line-height: 1.5; min-height: 1.4em;"></p>
+  </div>
+
   <!-- LEVEL UP EKRANI -->
   <div id="levelup-modal" style="position: fixed; inset: 0; background-color: rgba(0,0,0,0.85); z-index: 500; display: none; align-items: center; justify-content: center; padding: 20px;">
     <div class="system-frame" style="text-align: center; padding: 30px; box-shadow: 0 0 40px rgba(95, 212, 255, 0.3);">
@@ -450,7 +456,8 @@
         state.xp -= penalty;
         state.streak = 0;
         showToast(`SİSTEM CEZASI: ${missedDays} gün boşluk bırakıldı. Seri sıfırlandı${penalty > 0 ? `, -${penalty} XP` : ""}.`);
-        speakSystem(randomLine(PENALTY_LINES));
+        playPenaltySound();
+        speakSystem(randomLine(PENALTY_LINES), "penalty");
       }
     }
 
@@ -532,6 +539,33 @@
       playTone(440, 0.06, "square", 0, 0.06);
     }
 
+    // Rozet kazanma: parlak çift "ping" - level up'tan farklı, daha kısa ve tiz
+    function playBadgeSound() {
+      playTone(800, 0.1, "sine", 0, 0.12);
+      playTone(1400, 0.16, "sine", 0.1, 0.12);
+    }
+
+    // Ceza: kısa, inen ve donuk bir uyarı sesi - ödül seslerinin tam tersi bir his vermek için
+    function playPenaltySound() {
+      playTone(300, 0.18, "sawtooth", 0, 0.08);
+      playTone(180, 0.22, "sawtooth", 0.12, 0.07);
+    }
+
+    // speakSystem'den hemen önce çalan kısa "onay bipi" - konuşmaya başlamadan önce
+    // sistem sanki "hazırlanıyor" gibi hissettirir, tek başına TTS'ten çok daha havalı durur.
+    function playVoiceCue(type) {
+      if (type === "levelup") {
+        playTone(500, 0.08, "sine", 0, 0.08);
+        playTone(750, 0.1, "sine", 0.08, 0.08);
+      } else if (type === "badge") {
+        playTone(700, 0.06, "sine", 0, 0.07);
+      } else if (type === "penalty") {
+        playTone(260, 0.1, "square", 0, 0.06);
+      } else {
+        playTone(420, 0.05, "sine", 0, 0.06);
+      }
+    }
+
     // --- SESLİ SİSTEM (Web Speech API) ---
     // Tamamen tarayıcının kendi yerleşik ses motorunu kullanır: API anahtarı, internet
     // bağlantısı ya da ücret gerektirmez. Türkçe ses paketi varsa onu seçer, yoksa cihazın
@@ -541,7 +575,13 @@
       if (!("speechSynthesis" in window)) return;
       const voices = speechSynthesis.getVoices();
       if (voices.length) {
-        systemVoice = voices.find(v => v.lang && v.lang.toLowerCase().startsWith("tr")) || null;
+        // Önce Türkçe + erkek/derin isim taşıyan sesi dene, yoksa herhangi bir Türkçe ses,
+        // o da yoksa listedeki ilk sesi kullan. Amaç: mümkün olduğunca "sistem" gibi duyulan,
+        // tiz olmayan bir ton bulmak.
+        systemVoice =
+          voices.find(v => v.lang && v.lang.toLowerCase().startsWith("tr") && /male|erkek/i.test(v.name)) ||
+          voices.find(v => v.lang && v.lang.toLowerCase().startsWith("tr")) ||
+          null;
       }
     }
     if ("speechSynthesis" in window) {
@@ -563,17 +603,51 @@
     }
 
     // Sistem anonsları (görev tamamlandı, seviye atladı vb.) - öncekini keser ki gecikmeli çalmasın.
-    function speakSystem(text) {
+    // type: "quest" | "levelup" | "badge" | "penalty" - hem sesin tonunu hem eşlik eden bip/animasyonu belirler.
+    function speakSystem(text, type = "quest") {
+      showSystemToast(text); // metin, konuşmadan bağımsız olarak her zaman ekranda görünsün
       if (!state.voiceEnabled || !("speechSynthesis" in window)) return;
       try {
         speechSynthesis.cancel();
-        const utter = new SpeechSynthesisUtterance(text);
-        utter.lang = "tr-TR";
-        if (systemVoice) utter.voice = systemVoice;
-        utter.rate = 1.0;
-        utter.pitch = 0.8;
-        speechSynthesis.speak(utter);
+        playVoiceCue(type);
+        const kickoff = type === "levelup" ? 220 : type === "badge" ? 170 : 130;
+        setTimeout(() => {
+          const utter = new SpeechSynthesisUtterance(text);
+          utter.lang = "tr-TR";
+          if (systemVoice) utter.voice = systemVoice;
+          // Pitch düşürülüp hız hafif kısıldı - amaç "insan gibi okuma" değil,
+          // ölçülü ve mekanik bir "sistem sesi" hissi.
+          utter.rate = type === "levelup" ? 0.92 : 0.96;
+          utter.pitch = type === "levelup" ? 0.62 : 0.7;
+          speechSynthesis.speak(utter);
+        }, kickoff);
       } catch (e) {}
+    }
+
+    // Ekrandaki "SİSTEM" kutusunu daktilo efektiyle doldurur, konuşmayla yaklaşık senkron akar.
+    let sysToastTimer = null;
+    function showSystemToast(text) {
+      const box = document.getElementById("sys-toast");
+      const msgEl = document.getElementById("sys-toast-msg");
+      if (!box || !msgEl) return;
+      msgEl.textContent = "";
+      box.style.opacity = "1";
+      box.style.transform = "translateX(-50%) translateY(0)";
+
+      let i = 0;
+      const speed = 26; // ms/karakter, konuşma hızına yakın
+      clearInterval(sysToastTimer);
+      sysToastTimer = setInterval(() => {
+        i++;
+        msgEl.textContent = text.slice(0, i);
+        if (i >= text.length) {
+          clearInterval(sysToastTimer);
+          setTimeout(() => {
+            box.style.opacity = "0";
+            box.style.transform = "translateX(-50%) translateY(-16px)";
+          }, 1600);
+        }
+      }, speed);
     }
 
     function randomLine(arr) {
@@ -1009,11 +1083,12 @@
       // Sesli anons: aynı anda birden fazlası olabilir ama sadece en önemlisi okunur
       // (rozet > seviye atlama > normal görev tamamlama), üst üste binmesin diye.
       if (newBadges.length) {
-        speakSystem(BADGE_LINE(newBadges[0].name));
+        playBadgeSound();
+        speakSystem(BADGE_LINE(newBadges[0].name), "badge");
       } else if (leveledUp) {
-        speakSystem(randomLine(LEVEL_UP_LINES));
+        speakSystem(randomLine(LEVEL_UP_LINES), "levelup");
       } else {
-        speakSystem(randomLine(QUEST_COMPLETE_LINES));
+        speakSystem(randomLine(QUEST_COMPLETE_LINES), "quest");
       }
 
       saveState();
