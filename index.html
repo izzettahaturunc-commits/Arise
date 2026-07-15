@@ -457,7 +457,8 @@
         state.streak = 0;
         showToast(`SİSTEM CEZASI: ${missedDays} gün boşluk bırakıldı. Seri sıfırlandı${penalty > 0 ? `, -${penalty} XP` : ""}.`);
         playPenaltySound();
-        speakSystem(randomLine(PENALTY_LINES), "penalty");
+        const line = pickLine(PENALTY_LINES);
+        speakSystem(line.text, "penalty", line.audio);
       }
     }
 
@@ -603,24 +604,54 @@
     }
 
     // Sistem anonsları (görev tamamlandı, seviye atladı vb.) - öncekini keser ki gecikmeli çalmasın.
-    // type: "quest" | "levelup" | "badge" | "penalty" - hem sesin tonunu hem eşlik eden bip/animasyonu belirler.
-    function speakSystem(text, type = "quest") {
-      showSystemToast(text); // metin, konuşmadan bağımsız olarak her zaman ekranda görünsün
-      if (!state.voiceEnabled || !("speechSynthesis" in window)) return;
+    // audioPath verilirse önce kendi mp3'ünü çalmayı dener; dosya yoksa/yüklenemezse otomatik
+    // olarak tarayıcı TTS'ine düşer, yani kayıtlar eksikken de sistem sessiz kalmaz.
+    function speakSystem(text, type = "quest", audioPath = null) {
+      showSystemToast(text); // metin, ses ne olursa olsun her zaman ekranda görünsün
+      if (!state.voiceEnabled) return;
+      playVoiceCue(type);
+      const kickoff = type === "levelup" ? 220 : type === "badge" ? 170 : 130;
+      setTimeout(() => {
+        if (audioPath) {
+          playRecordedLine(audioPath, text, type);
+        } else {
+          speakTTS(text, type);
+        }
+      }, kickoff);
+    }
+
+    // Kaydedilmiş bir mp3'ü çalar. Dosya yoksa (404) ya da tarayıcı çalamazsa 'error' olayı
+    // tetiklenir ve otomatik olarak TTS'e düşülür - böylece eksik kayıt hiçbir zaman sessizliğe yol açmaz.
+    function playRecordedLine(audioPath, fallbackText, type) {
+      let fellBack = false;
+      const toFallback = () => {
+        if (fellBack) return;
+        fellBack = true;
+        speakTTS(fallbackText, type);
+      };
+      try {
+        const player = new Audio(audioPath);
+        player.addEventListener("error", toFallback, { once: true });
+        const playPromise = player.play();
+        if (playPromise && typeof playPromise.catch === "function") {
+          playPromise.catch(toFallback);
+        }
+      } catch (e) {
+        toFallback();
+      }
+    }
+
+    // Tarayıcının yerleşik ses motoruyla okur - kayıt yokken devreye giren yedek yol.
+    function speakTTS(text, type) {
+      if (!("speechSynthesis" in window)) return;
       try {
         speechSynthesis.cancel();
-        playVoiceCue(type);
-        const kickoff = type === "levelup" ? 220 : type === "badge" ? 170 : 130;
-        setTimeout(() => {
-          const utter = new SpeechSynthesisUtterance(text);
-          utter.lang = "tr-TR";
-          if (systemVoice) utter.voice = systemVoice;
-          // Pitch düşürülüp hız hafif kısıldı - amaç "insan gibi okuma" değil,
-          // ölçülü ve mekanik bir "sistem sesi" hissi.
-          utter.rate = type === "levelup" ? 0.92 : 0.96;
-          utter.pitch = type === "levelup" ? 0.62 : 0.7;
-          speechSynthesis.speak(utter);
-        }, kickoff);
+        const utter = new SpeechSynthesisUtterance(text);
+        utter.lang = "tr-TR";
+        if (systemVoice) utter.voice = systemVoice;
+        utter.rate = type === "levelup" ? 0.92 : 0.96;
+        utter.pitch = type === "levelup" ? 0.62 : 0.7;
+        speechSynthesis.speak(utter);
       } catch (e) {}
     }
 
@@ -650,42 +681,53 @@
       }, speed);
     }
 
-    function randomLine(arr) {
-      return arr[Math.floor(Math.random() * arr.length)];
-    }
-
+    
     function toggleVoice() {
       state.voiceEnabled = !state.voiceEnabled;
       document.getElementById("voice-toggle-btn").innerText = state.voiceEnabled ? "AÇIK" : "KAPALI";
       document.getElementById("voice-toggle-btn").style.color = state.voiceEnabled ? "#5fd4ff" : "#546b85";
       if (state.voiceEnabled) {
-        speakSystem("Sistem sesi aktif.");
+        speakSystem(VOICE_ON_LINE.text, "quest", VOICE_ON_LINE.audio);
       } else if ("speechSynthesis" in window) {
         speechSynthesis.cancel();
       }
       saveState();
     }
 
-    const QUEST_COMPLETE_LINES = [
-      "Görev tamamlandı. Sistem seni onaylıyor.",
-      "Zayıflık bir adım daha geride kaldı.",
-      "Güç arttı. Sınırlarını zorlamaya devam et.",
-      "Yeterlisin avcı. Sıradaki hedefe geç.",
-      "Sistem kaydetti. Gelişimin devam ediyor.",
-      "İyi iş. Ama sistem senden fazlasını bekliyor.",
-      "Bir görev daha tamamlandı. Sistem seni izliyor."
+    // Sistem sesleri: mp3'lerin varsa onları çalar (sounds/ klasörü boş kalsa da sorun değil,
+    // hiçbiri yoksa aşağıdaki metinler tarayıcı sesiyle okunur). Cümlelerin arasına bilinçli
+    // olarak "..." ve kısa duraklamalar eklendi - tarayıcı noktalama gördüğünde durur, bu da
+    // düz okumayı kırıp daha "sistem konuşuyor" gibi bir tempo veriyor.
+    const QUEST_LINES = [
+      { text: "Görev... tamamlandı. Sistem seni onaylıyor.", audio: "sounds/quest_1.mp3" },
+      { text: "Zayıflık... bir adım daha geride kaldı.", audio: "sounds/quest_2.mp3" },
+      { text: "Güç arttı. Sınırlarını zorlamaya... devam et.", audio: "sounds/quest_3.mp3" },
+      { text: "Yeterlisin avcı. Sıradaki hedefe geç.", audio: "sounds/quest_4.mp3" },
+      { text: "Sistem kaydetti. Gelişimin... devam ediyor.", audio: "sounds/quest_5.mp3" },
+      { text: "İyi iş. Ama sistem senden... fazlasını bekliyor.", audio: "sounds/quest_6.mp3" },
+      { text: "Bir görev daha tamamlandı. Sistem seni izliyor.", audio: "sounds/quest_7.mp3" }
     ];
-    const LEVEL_UP_LINES = [
-      "Seviye atladın. Yeni bir güç uyanıyor.",
-      "Sistem güncellendi. Artık daha güçlüsün.",
-      "Sınıf yükseldi. Sistem seni izlemeye devam ediyor.",
-      "Uyanış devam ediyor. Bir seviye daha aştın."
+    const LEVELUP_LINES = [
+      { text: "Seviye atladın. Yeni bir güç... uyanıyor.", audio: "sounds/levelup_1.mp3" },
+      { text: "Sistem güncellendi. Artık... daha güçlüsün.", audio: "sounds/levelup_2.mp3" },
+      { text: "Sınıf yükseldi. Sistem seni izlemeye... devam ediyor.", audio: "sounds/levelup_3.mp3" },
+      { text: "Uyanış... devam ediyor. Bir seviye daha aştın.", audio: "sounds/levelup_4.mp3" }
     ];
     const PENALTY_LINES = [
-      "Sistem cezası uygulandı. Disiplinini kaybetme avcı.",
-      "Boşluk tespit edildi. Sistem seni uyarıyor."
+      { text: "Sistem cezası... uygulandı. Disiplinini kaybetme avcı.", audio: "sounds/penalty_1.mp3" },
+      { text: "Boşluk tespit edildi. Sistem seni... uyarıyor.", audio: "sounds/penalty_2.mp3" }
     ];
-    const BADGE_LINE = (name) => `Yeni bir rozet kazandın. ${name}.`;
+    // Rozet sesleri kasıtlı olarak jenerik - rozetin adı sabit bir kayıtta olamayacağı için
+    // sesli anons genel bir tebrik cümlesi söylüyor, rozetin adını ekrandaki SİSTEM kutusu gösteriyor.
+    const BADGE_LINES = [
+      { text: "Yeni bir rozet... kazandın avcı.", audio: "sounds/badge_1.mp3" },
+      { text: "Sistem seni ödüllendiriyor. Yeni rozet... kazanıldı.", audio: "sounds/badge_2.mp3" }
+    ];
+    const VOICE_ON_LINE = { text: "Sistem sesi... aktif.", audio: "sounds/voice_on.mp3" };
+
+    function pickLine(arr) {
+      return arr[Math.floor(Math.random() * arr.length)];
+    }
 
     function switchTab(tabId) {
       document.querySelectorAll(".tab-content").forEach(el => el.classList.remove("active"));
@@ -1084,11 +1126,14 @@
       // (rozet > seviye atlama > normal görev tamamlama), üst üste binmesin diye.
       if (newBadges.length) {
         playBadgeSound();
-        speakSystem(BADGE_LINE(newBadges[0].name), "badge");
+        const line = pickLine(BADGE_LINES);
+        speakSystem(`${line.text} ${newBadges[0].name}.`, "badge", line.audio);
       } else if (leveledUp) {
-        speakSystem(randomLine(LEVEL_UP_LINES), "levelup");
+        const line = pickLine(LEVELUP_LINES);
+        speakSystem(line.text, "levelup", line.audio);
       } else {
-        speakSystem(randomLine(QUEST_COMPLETE_LINES), "quest");
+        const line = pickLine(QUEST_LINES);
+        speakSystem(line.text, "quest", line.audio);
       }
 
       saveState();
