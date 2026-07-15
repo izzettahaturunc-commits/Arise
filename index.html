@@ -140,6 +140,84 @@
     .overlay-screen.active {
       display: flex;
     }
+
+    /* SİSTEM UYANIŞ EFEKTLERİ */
+    @keyframes systemShake {
+      0% { transform: translate(0, 0); }
+      10% { transform: translate(-3px, 2px); }
+      20% { transform: translate(3px, -2px); }
+      30% { transform: translate(-2px, -3px); }
+      40% { transform: translate(2px, 3px); }
+      50% { transform: translate(-3px, 1px); }
+      60% { transform: translate(3px, -1px); }
+      70% { transform: translate(-1px, 2px); }
+      80% { transform: translate(1px, -2px); }
+      90% { transform: translate(-1px, 1px); }
+      100% { transform: translate(0, 0); }
+    }
+    body.system-glitch {
+      animation: systemShake 0.5s linear;
+    }
+    @keyframes glitchFlash {
+      0%, 100% { opacity: 0; }
+      8% { opacity: 0.5; }
+      9% { opacity: 0; }
+      14% { opacity: 0.3; }
+      15% { opacity: 0; }
+    }
+    #glitch-flash {
+      position: fixed;
+      inset: 0;
+      background: linear-gradient(180deg, rgba(95,212,255,0.15), rgba(127,95,255,0.1));
+      z-index: 600;
+      pointer-events: none;
+      opacity: 0;
+      display: none;
+    }
+    #glitch-flash.active {
+      display: block;
+      animation: glitchFlash 0.5s linear;
+    }
+    @keyframes systemPulse {
+      0%, 100% { box-shadow: 0 0 20px rgba(95, 212, 255, 0.2); }
+      50% { box-shadow: 0 0 45px rgba(95, 212, 255, 0.55); }
+    }
+    .quest-window-frame {
+      animation: systemPulse 2.2s ease-in-out infinite;
+    }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .fade-in-line {
+      animation: fadeUp 0.35s ease-out forwards;
+      opacity: 0;
+    }
+    .penalty-card {
+      border: 1px solid #6b1f1f !important;
+      background-color: #1a0a0a !important;
+    }
+    @keyframes penaltyBlink {
+      0%, 100% { border-color: #6b1f1f; }
+      50% { border-color: #ff4d4d; }
+    }
+    .penalty-card.urgent {
+      animation: penaltyBlink 1.4s ease-in-out infinite;
+    }
+    .shadow-chip {
+      border: 1px solid #2a1a4a;
+      background-color: #0c0818;
+      color: #b39bff;
+      padding: 10px;
+      font-size: 10px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .shadow-chip.locked {
+      color: #3a3550;
+      border-color: #16121f;
+    }
   </style>
 </head>
 <body>
@@ -193,6 +271,7 @@
 
     <!-- SEKME 1: GÖREVLER -->
     <div id="tab-quests" class="tab-content active">
+      <div id="penalty-quest-slot"></div>
       <p id="completion-status" style="font-size: 12px; color: #7a8ca3; margin-bottom: 15px;">0 / 5 görev tamamlandı</p>
       <div id="quests-list"></div>
 
@@ -207,7 +286,7 @@
         <h3 style="font-size: 13px; font-weight: bold; color: #5fd4ff; margin-bottom: 12px;">AVCI DURUMU</h3>
         <div style="font-size: 12px; line-height: 2.2;">
           <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #14233c;">
-            <span style="color: #7a8ca3;">Unvan:</span><span style="color: white; font-weight: bold;">Gölge Savaşçısı</span>
+            <span style="color: #7a8ca3;">Unvan:</span><span id="char-title" style="color: white; font-weight: bold;">Zayıf Avcı</span>
           </div>
           <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #14233c;">
             <span style="color: #7a8ca3;">Mevcut Sınıf:</span><span id="char-rank" style="color: #5fd4ff; font-weight: bold;">E Sınıfı</span>
@@ -250,6 +329,13 @@
       <div class="system-frame">
         <h3 style="font-size: 13px; font-weight: bold; color: #5fd4ff; margin-bottom: 12px;">ROZETLER</h3>
         <div id="badges-list" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;"></div>
+      </div>
+
+      <div class="system-frame" style="border-color: #2a1a4a;">
+        <h3 style="font-size: 13px; font-weight: bold; color: #7f5fff; margin-bottom: 4px;">GÖLGE ORDUSU</h3>
+        <p style="font-size: 10px; color: #546b85; margin-bottom: 12px;">Rozet kazandıkça yeni gölgeler ele geçirirsin.</p>
+        <p id="shadow-count-text" style="font-size: 11px; color: #a89bd6; margin-bottom: 10px;">0 / 7 gölge ele geçirildi</p>
+        <div id="shadows-list" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;"></div>
       </div>
     </div>
 
@@ -360,9 +446,33 @@
       <p style="color: #5fd4ff; font-size: 11px; letter-spacing: 3px; margin-bottom: 5px;">SEVİYE ATLADIN</p>
       <p id="lvl-up-text" style="font-size: 44px; font-weight: bold; color: white; margin-bottom: 5px;">LV. 2</p>
       <p id="rank-up-text" style="color: #7a8ca3; font-size: 11px; letter-spacing: 2px; margin-bottom: 25px;">E RANK</p>
+      <p id="rank-up-title" style="color: #b39bff; font-size: 11px; letter-spacing: 1px; margin-bottom: 20px; display: none;"></p>
       <button onclick="closeLvlUp()" class="btn" style="padding: 10px 25px;">DEVAM ET</button>
     </div>
   </div>
+
+  <!-- GÖLGE ÇAĞIRMA EKRANI -->
+  <div id="shadow-modal" style="position: fixed; inset: 0; background-color: rgba(0,0,0,0.9); z-index: 500; display: none; align-items: center; justify-content: center; padding: 20px;">
+    <div class="system-frame" style="text-align: center; padding: 30px; box-shadow: 0 0 50px rgba(127, 95, 255, 0.4); border-color: #4a3a7a;">
+      <p style="color: #7f5fff; font-size: 11px; letter-spacing: 3px; margin-bottom: 5px;">YENİ BİR GÖLGE ELE GEÇİRİLDİ</p>
+      <p id="shadow-name-text" style="font-size: 26px; font-weight: bold; color: white; margin-bottom: 8px;">GÖLGE</p>
+      <p id="shadow-desc-text" style="color: #a89bd6; font-size: 11px; line-height: 1.6; margin-bottom: 22px; max-width: 260px;"></p>
+      <button onclick="closeShadowModal()" class="btn" style="padding: 10px 25px; border-color: rgba(127, 95, 255, 0.5); color: #b39bff;">ARİSE</button>
+    </div>
+  </div>
+
+  <!-- GÜNLÜK SİSTEM PENCERESİ (her gün girişte açılan dramatik görev penceresi) -->
+  <div id="daily-window-modal" style="position: fixed; inset: 0; background-color: rgba(0,0,0,0.92); z-index: 550; display: none; align-items: center; justify-content: center; padding: 20px;">
+    <div class="system-frame quest-window-frame" style="max-width: 380px; width: 100%; padding: 24px;">
+      <p style="font-size: 9px; letter-spacing: 4px; color: rgba(95, 212, 255, 0.7); text-align: center; margin-bottom: 4px;">SİSTEM</p>
+      <h2 style="text-align: center; color: white; font-size: 20px; letter-spacing: 2px; margin-bottom: 4px;">[ GÜNLÜK GÖREV ]</h2>
+      <p id="daily-window-sub" style="text-align: center; color: #7a8ca3; font-size: 10px; margin-bottom: 18px;">Tamamlanmazsa ceza uygulanacaktır.</p>
+      <div id="daily-window-list" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 22px;"></div>
+      <button onclick="closeDailyWindow()" class="btn" style="width: 100%; padding: 12px; background-color: #5fd4ff; color: #02121c; border: none; letter-spacing: 2px;">GÖREVİ KABUL ET</button>
+    </div>
+  </div>
+
+  <div id="glitch-flash"></div>
 
   <!-- ALT MENÜ -->
   <div class="bottom-nav" id="app-nav" style="display: none;">
@@ -394,10 +504,36 @@
       bonusDay: null,    // ekstra antrenmanların sayıldığı gün
       bonusCount: {},    // o gün her ekstra görevden kaç kez yapıldığı
       badges: [],        // kazanılan rozet id'leri
-      voiceEnabled: true // sesli sistem anonsları açık/kapalı
+      voiceEnabled: true, // sesli sistem anonsları açık/kapalı
+      shadows: [],        // ele geçirilen gölgelerin id'leri (rozetlere bağlı)
+      penaltyQuest: null, // { targetId, targetAmount, progress, assignedDay }
+      lastWindowDay: null // günlük sistem penceresinin en son gösterildiği gün
     };
 
     const RANKS = ["E", "D", "C", "B", "A", "S"];
+
+    // Rank'a göre unvan - Solo Leveling'deki gibi güç arttıkça unvan değişsin
+    const TITLES = {
+      E: "Zayıf Avcı",
+      D: "Gölge Çırağı",
+      C: "Gölge Savaşçısı",
+      B: "Gölgelerin Efendisi",
+      A: "Kaos Avcısı",
+      S: "Monarch"
+    };
+    const getTitle = (lvl) => TITLES[getRank(lvl)];
+
+    // Gölge Ordusu: her rozet, ele geçirilebilir bir gölgeye karşılık gelir.
+    // Rozet kazanıldığında bağlı gölge de otomatik olarak "ele geçirilir".
+    const SHADOWS = [
+      { id: "shadow_streak7", badgeId: "streak7", name: "İgris'in Gölgesi", desc: "7 günlük disiplinin ödülü. Sürekliliğin sembolü." },
+      { id: "shadow_streak30", badgeId: "streak30", name: "Beru", desc: "30 gün boyunca sistemi hiç aksatmadın. Sadık bir gölge." },
+      { id: "shadow_power100", badgeId: "power100", name: "Tank", desc: "100 tekrarlık güç eşiğini geçtin." },
+      { id: "shadow_power500", badgeId: "power500", name: "Tusk", desc: "500 tekrar - artık ham güç senin tarafında." },
+      { id: "shadow_endurance600", badgeId: "endurance600", name: "Iron", desc: "10 dakikalık toplam dayanıklılık - kırılmadın." },
+      { id: "shadow_speed20", badgeId: "speed20", name: "Greed", desc: "20 km'lik toplam mesafe - hız artık senin silahın." },
+      { id: "shadow_rankUp", badgeId: "rankUp", name: "Bellion", desc: "İlk sınıf atlayışın. Sistem seni ciddiye almaya başladı." }
+    ];
     const QUESTS = [
       { id: "pushup", name: "Şınav", unit: "tekrar", target: 20, xp: 30, stat: "power" },
       { id: "squat", name: "Squat", unit: "tekrar", target: 30, xp: 30, stat: "power" },
@@ -445,8 +581,10 @@
       return QUESTS.find(item => item.id === id) || BONUS_QUESTS.find(item => item.id === id);
     }
 
-    // Bir gün atlanınca (hiç görev tamamlanmadan bir gün geçince) küçük bir XP cezası uygular.
-    // Amaç cezalandırmak değil, seri kırmanın bir bedeli olsun.
+    // Bir gün atlanınca (hiç görev tamamlanmadan bir gün geçince) XP cezası uygular VE
+    // Solo Leveling'deki "Ceza Görevi" mantığıyla, o gün tamamlanana kadar duran, sıradan
+    // görevlerden ayrı, zorunlu bir ek görev atar. Amaç gerçekten cezalandırmak değil,
+    // seri kırmanın somut bir bedeli olsun ve sistem "seni izliyor" hissi güçlensin.
     function applyPenaltyIfNeeded() {
       if (!state.lastDay) return;
       const gapDays = Math.round((new Date(getTodayStr()) - new Date(state.lastDay)) / 86400000);
@@ -455,11 +593,79 @@
         const penalty = Math.min(state.xp, 15 * missedDays);
         state.xp -= penalty;
         state.streak = 0;
+        assignPenaltyQuest(missedDays);
         showToast(`SİSTEM CEZASI: ${missedDays} gün boşluk bırakıldı. Seri sıfırlandı${penalty > 0 ? `, -${penalty} XP` : ""}.`);
         playPenaltySound();
+        triggerGlitch();
         const line = pickLine(PENALTY_LINES);
         speakSystem(line.text, "penalty", line.audio);
       }
+    }
+
+    // Ceza görevini atar. Hedef, kaç gün boşluk bırakıldığına göre büyür ama makul bir tavanda kalır.
+    function assignPenaltyQuest(missedDays) {
+      const target = Math.min(150, 30 + missedDays * 20);
+      state.penaltyQuest = { target, progress: 0, assignedDay: getTodayStr() };
+    }
+
+    function renderPenaltyCard() {
+      const slot = document.getElementById("penalty-quest-slot");
+      if (!slot) return;
+      slot.innerHTML = "";
+      if (!state.penaltyQuest) return;
+
+      const p = state.penaltyQuest;
+      const card = document.createElement("div");
+      card.className = "quest-card penalty-card urgent";
+      card.style.marginBottom = "16px";
+      card.innerHTML = `
+        <div>
+          <p style="font-size: 9px; letter-spacing: 2px; color: #ff6b6b; margin-bottom: 4px;">⚠ CEZA GÖREVİ · ZORUNLU</p>
+          <p style="font-size: 14px; font-weight: bold; color: white;">Şınav</p>
+          <p style="font-size: 11px; color: #c98a8a;">Hedef: ${p.target} tekrar · Tamamlanmazsa seri kilitli kalır</p>
+        </div>
+        <button onclick="startPenaltyQuest()" class="btn" style="border-color: rgba(255,107,107,0.5); color: #ff6b6b;">BAŞLAT</button>
+      `;
+      slot.appendChild(card);
+    }
+
+    function startPenaltyQuest() {
+      activeQuestId = "penalty";
+      tempReps = 0;
+      playStartSound();
+      document.getElementById("cam-title").innerText = "CEZA GÖREVİ · ŞINAV";
+      document.getElementById("rep-count").innerText = "0";
+      document.getElementById("rep-unit").innerText = "tekrar";
+      document.getElementById("camera-screen").classList.add("active");
+      document.getElementById("cam-err").style.display = "none";
+
+      navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false })
+        .then(async stream => {
+          streamObj = stream;
+          const video = document.getElementById("webcam");
+          video.srcObject = stream;
+          await new Promise(res => { video.onloadedmetadata = res; });
+          startPoseTracking("pushup", video);
+        })
+        .catch(() => { document.getElementById("cam-err").style.display = "block"; });
+    }
+
+    function completePenaltyQuest(amount) {
+      if (!state.penaltyQuest) return;
+      state.penaltyQuest.progress += amount;
+      state.totals.power += amount;
+      if (state.penaltyQuest.progress >= state.penaltyQuest.target) {
+        state.penaltyQuest = null;
+        showToast("Ceza görevi tamamlandı. Sistem seni affetti.");
+        playQuestSound();
+        speakSystem("Ceza... temizlendi. Sistem seni yeniden değerlendiriyor.", "quest");
+      } else {
+        const remaining = state.penaltyQuest.target - state.penaltyQuest.progress;
+        showToast(`Kaydedildi. Kalan: ${remaining} tekrar.`);
+        playQuestSound();
+      }
+      saveState();
+      updateUI();
     }
 
     function checkNewBadges() {
@@ -474,12 +680,39 @@
       return earned;
     }
 
+    // Yeni kazanılan rozetlere karşılık gelen gölgeleri "ele geçirir".
+    // Rozet ile gölge bire bir eşleşiyor, böylece her başarı somut bir ödülle görselleşiyor.
+    function checkNewShadows(newBadges) {
+      const earnedShadows = [];
+      newBadges.forEach(badge => {
+        const shadow = SHADOWS.find(s => s.badgeId === badge.id);
+        if (shadow && !state.shadows.includes(shadow.id)) {
+          state.shadows.push(shadow.id);
+          earnedShadows.push(shadow);
+        }
+      });
+      return earnedShadows;
+    }
+
+    function openShadowModal(shadow) {
+      document.getElementById("shadow-name-text").innerText = shadow.name;
+      document.getElementById("shadow-desc-text").innerText = shadow.desc;
+      document.getElementById("shadow-modal").style.display = "flex";
+      playShadowExtractSound();
+      triggerGlitch();
+      if (navigator.vibrate) navigator.vibrate([40, 40, 40, 40, 100]);
+    }
+    function closeShadowModal() {
+      document.getElementById("shadow-modal").style.display = "none";
+    }
+
     // Başlangıç Kurulumu
     window.onload = async function() {
       await loadState();
       if (!state.startDate) state.startDate = getTodayStr();
       applyPenaltyIfNeeded();
-      checkNewBadges();
+      const earlyBadges = checkNewBadges();
+      checkNewShadows(earlyBadges); // sessizce arka planda eşleştir, popup açma
       saveState();
       updateUI();
     };
@@ -489,6 +722,56 @@
       document.getElementById("app-content").style.display = "block";
       document.getElementById("app-nav").style.display = "flex";
       getAudioCtx(); // ilk dokunuşta ses motorunu aç (mobil tarayıcılar bunu şart koşuyor)
+      playSystemBootSound();
+
+      const today = getTodayStr();
+      if (state.lastWindowDay !== today) {
+        setTimeout(() => openDailyWindow(), 350);
+      }
+    }
+
+    // Solo Leveling'deki "[Günlük Görev]" penceresini andıran, dramatik bir günlük özet ekranı.
+    // Her gün ilk girişte bir kez açılır, satırlar tek tek belirir, sistem sesiyle desteklenir.
+    function openDailyWindow() {
+      const listEl = document.getElementById("daily-window-list");
+      const subEl = document.getElementById("daily-window-sub");
+      listEl.innerHTML = "";
+
+      const tier = getDifficultyTier();
+      let rowIndex = 0;
+
+      if (state.penaltyQuest) {
+        const row = document.createElement("div");
+        row.className = "fade-in-line";
+        row.style.animationDelay = `${rowIndex * 0.12}s`;
+        row.innerHTML = `<div style="display:flex; justify-content:space-between; border-bottom:1px solid #2a1414; padding-bottom:6px;"><span style="color:#ff6b6b; font-size:12px;">⚠ CEZA GÖREVİ</span><span style="color:#ff6b6b; font-size:11px;">${state.penaltyQuest.target} tekrar</span></div>`;
+        listEl.appendChild(row);
+        rowIndex++;
+        subEl.innerText = "Ceza görevin var. Önce onu temizlemelisin.";
+      } else {
+        subEl.innerText = "Tamamlanmazsa ceza uygulanacaktır.";
+      }
+
+      QUESTS.forEach(q => {
+        const target = getScaledTarget(q.target);
+        const done = !!state.completed[q.id];
+        const row = document.createElement("div");
+        row.className = "fade-in-line";
+        row.style.animationDelay = `${rowIndex * 0.12}s`;
+        row.innerHTML = `<div style="display:flex; justify-content:space-between; border-bottom:1px solid #14233c; padding-bottom:6px;"><span style="color:${done ? '#4ade80' : 'white'}; font-size:12px;">${done ? '✓' : '·'} ${q.name}</span><span style="color:#7a8ca3; font-size:11px;">${target} ${q.unit}${tier > 0 ? ` · K${tier}` : ''}</span></div>`;
+        listEl.appendChild(row);
+        rowIndex++;
+      });
+
+      document.getElementById("daily-window-modal").style.display = "flex";
+      playQuestWindowSound();
+      triggerGlitch();
+    }
+
+    function closeDailyWindow() {
+      state.lastWindowDay = getTodayStr();
+      document.getElementById("daily-window-modal").style.display = "none";
+      saveState();
     }
 
     // ---- SES EFEKTLERİ (özgün, kod ile üretilen sentetik sesler) ----
@@ -550,6 +833,40 @@
     function playPenaltySound() {
       playTone(300, 0.18, "sawtooth", 0, 0.08);
       playTone(180, 0.22, "sawtooth", 0.12, 0.07);
+    }
+
+    // Gölge çağırma: derin, karanlık bir "yükseliş" - level up'tan farklı, daha alçak ve gizemli
+    function playShadowExtractSound() {
+      playTone(110, 0.6, "sawtooth", 0, 0.07);
+      playTone(165, 0.5, "sawtooth", 0.1, 0.06);
+      playTone(220, 0.4, "sine", 0.25, 0.08);
+      playTone(440, 0.35, "sine", 0.4, 0.06);
+    }
+
+    // Sistem açılışı: uygulamaya her günkü ilk girişte çalan kısa "boot" sekansı
+    function playSystemBootSound() {
+      playTone(300, 0.1, "square", 0, 0.05);
+      playTone(500, 0.1, "square", 0.1, 0.05);
+      playTone(800, 0.15, "sine", 0.2, 0.08);
+    }
+
+    // Günlük görev penceresi açılırken çalan kısa, ciddi bir "dikkat" sesi
+    function playQuestWindowSound() {
+      playTone(200, 0.3, "sawtooth", 0, 0.06);
+      playTone(600, 0.2, "sine", 0.15, 0.09);
+      playTone(900, 0.25, "sine", 0.3, 0.07);
+    }
+
+    // Ekranı kısa süreliğine "glitch" efektiyle titretir - seviye atlama ve gölge çağırma anlarında
+    // dramatik bir "sistem müdahale ediyor" hissi vermek için.
+    function triggerGlitch() {
+      const flash = document.getElementById("glitch-flash");
+      document.body.classList.add("system-glitch");
+      if (flash) flash.classList.add("active");
+      setTimeout(() => {
+        document.body.classList.remove("system-glitch");
+        if (flash) flash.classList.remove("active");
+      }, 550);
     }
 
     // speakSystem'den hemen önce çalan kısa "onay bipi" - konuşmaya başlamadan önce
@@ -757,6 +1074,8 @@
       document.getElementById("streak-display").innerText = state.streak;
       document.getElementById("rank-display").innerText = currentRank;
       document.getElementById("char-rank").innerText = currentRank + " Sınıfı";
+      const titleEl = document.getElementById("char-title");
+      if (titleEl) titleEl.innerText = getTitle(state.level);
 
       const voiceBtn = document.getElementById("voice-toggle-btn");
       if (voiceBtn) {
@@ -826,6 +1145,8 @@
       });
 
       renderBadges();
+      renderShadows();
+      renderPenaltyCard();
     }
 
     function renderBadges() {
@@ -839,6 +1160,23 @@
         chip.innerText = (earned ? "🏅 " : "🔒 ") + b.name;
         el.appendChild(chip);
       });
+    }
+
+    function renderShadows() {
+      const el = document.getElementById("shadows-list");
+      const countEl = document.getElementById("shadow-count-text");
+      if (!el) return;
+      el.innerHTML = "";
+      SHADOWS.forEach(s => {
+        const earned = state.shadows.includes(s.id);
+        const chip = document.createElement("div");
+        chip.className = "shadow-chip" + (earned ? "" : " locked");
+        chip.innerHTML = earned
+          ? `<div style="font-weight:bold; color:#d6ccff; margin-bottom:3px;">👤 ${s.name}</div><div style="font-size:9px; color:#8a7ec2;">ele geçirildi</div>`
+          : `<div style="font-weight:bold;">🔒 ???</div><div style="font-size:9px;">kilitli</div>`;
+        el.appendChild(chip);
+      });
+      if (countEl) countEl.innerText = `${state.shadows.length} / ${SHADOWS.length} gölge ele geçirildi`;
     }
 
     // Aktif Görev Kamera Süreci
@@ -1086,6 +1424,11 @@
     }
 
     function submitCameraQuest() {
+      if (activeQuestId === "penalty") {
+        closeCamera();
+        completePenaltyQuest(tempReps);
+        return;
+      }
       const q = getQuestById(activeQuestId);
       closeCamera();
       completeQuest(q, tempReps);
@@ -1121,6 +1464,7 @@
       playQuestSound();
       const leveledUp = grantXp(xpGain);
       const newBadges = checkNewBadges();
+      const newShadows = checkNewShadows(newBadges);
 
       // Sesli anons: aynı anda birden fazlası olabilir ama sadece en önemlisi okunur
       // (rozet > seviye atlama > normal görev tamamlama), üst üste binmesin diye.
@@ -1138,6 +1482,11 @@
 
       saveState();
       updateUI();
+
+      // Gölge çağırma ekranı, level-up/rozet modallarının ardına sıraya girsin diye küçük bir gecikmeyle açılır.
+      if (newShadows.length) {
+        setTimeout(() => openShadowModal(newShadows[0]), leveledUp ? 1400 : 700);
+      }
     }
 
     // Koşu Görevi (GPS + İç Mekan Adım Sayacı)
@@ -1434,10 +1783,20 @@
       }
 
       if (leveledUp) {
+        const prevRank = getRank(state.level - 1 < 1 ? 1 : state.level - 1);
+        const newRank = getRank(state.level);
         document.getElementById("lvl-up-text").innerText = `LV. ${state.level}`;
-        document.getElementById("rank-up-text").innerText = getRank(state.level) + " RANK";
+        document.getElementById("rank-up-text").innerText = newRank + " RANK";
+        const titleEl = document.getElementById("rank-up-title");
+        if (newRank !== prevRank) {
+          titleEl.innerText = `Yeni unvan: ${getTitle(state.level)}`;
+          titleEl.style.display = "block";
+        } else {
+          titleEl.style.display = "none";
+        }
         document.getElementById("levelup-modal").style.display = "flex";
         playLevelUpSound();
+        triggerGlitch();
         if (navigator.vibrate) navigator.vibrate([80, 60, 120]);
       }
       return leveledUp;
